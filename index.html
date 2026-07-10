@@ -4,7 +4,6 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Control Semanal de Consumo de Gas — Hanaska</title>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     --navy:#002060; --navy-ink:#1B2431; --muted:#5B6478; --faint:#8A93A6;
@@ -213,6 +212,8 @@ function addDaysISO(iso, n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getD
 function fmtDate(d){ return d.toLocaleDateString("es-EC",{day:"2-digit",month:"2-digit",year:"numeric"}); }
 function money(n){ return `$${(Number(n)||0).toFixed(2)}`; }
 function punto(){ return PUNTOS.find(p=>p.codigo===state.puntoCod); }
+function idADriveThumb(id){ return `https://drive.google.com/thumbnail?id=${id}&sz=w300`; }
+function idADriveView(id){ return `https://drive.google.com/file/d/${id}/view`; }
 
 // =============================================================================
 // Cálculos derivados
@@ -324,7 +325,15 @@ function renderHistory(){
   list.innerHTML = state.history.map(r=>{
     const bloq = Number(r.Ratio) >= RATIO_LIMITE;  // Ratio se guarda ya en porcentaje (ej. 5.89 = 5.89%)
     const p = PUNTOS.find(x=>x.codigo===r.Punto) || {};
-    const nImgs = (r.Imagenes||[]).length;
+    const imgIds = r.Imagenes || [];
+    const thumbsHtml = imgIds.length ? `
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+        ${imgIds.map(id => `
+          <a href="${idADriveView(id)}" target="_blank" rel="noopener" style="display:block;width:44px;height:44px;border-radius:6px;overflow:hidden;border:1px solid var(--line);">
+            <img src="${idADriveThumb(id)}" alt="evidencia" style="width:100%;height:100%;object-fit:cover;display:block;" />
+          </a>
+        `).join("")}
+      </div>` : "";
     return `
       <div class="hist-item">
         <div class="hist-top">
@@ -334,11 +343,9 @@ function renderHistory(){
         <div class="hist-sub">Reposición ${r.FechaReposicion} · ${r.FechaInicio} al ${r.FechaFin}</div>
         <div class="hist-bottom">
           <div style="font-size:12px;"><strong>${money(r.Valor)}</strong> · ${r.TotalGas} tanques</div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            ${nImgs>0 ? `<span style="font-size:11px;color:var(--faint);">🖼 ${nImgs}</span>` : ""}
-            <button class="tinybtn" data-dl="${r.Punto}|${r.FechaReposicion}" ${bloq?"disabled":""}>⬇️ Excel</button>
-          </div>
+          <button class="tinybtn" data-dl="${r.Punto}|${r.FechaReposicion}" ${bloq?"disabled":""}>⬇️ Excel</button>
         </div>
+        ${thumbsHtml}
       </div>
     `;
   }).join("");
@@ -397,20 +404,28 @@ function toast(msg){
 // =============================================================================
 // Backend: JSONP (leer) + iframe form POST (guardar)
 // =============================================================================
-function cargarHistorial(){
+function fetchHistorialJSONP(){
+  return new Promise((resolve)=>{
+    const cbName = "cb_" + Date.now() + "_" + Math.floor(Math.random()*10000);
+    const script = document.createElement("script");
+    const cleanup = ()=>{ delete window[cbName]; script.remove(); };
+    window[cbName] = function(data){
+      resolve((data && data.registros) ? data.registros : []);
+      cleanup();
+    };
+    script.onerror = ()=>{ resolve([]); cleanup(); };
+    script.src = `${CONFIG.API_URL}?action=listar&callback=${cbName}&_=${Date.now()}`;
+    document.body.appendChild(script);
+  });
+}
+
+async function cargarHistorial(){
   state.history = null;
   renderHistory();
-  const cbName = "cb_" + Date.now();
-  window[cbName] = function(data){
-    state.history = (data && data.registros) ? data.registros : [];
-    renderHistory();
-    delete window[cbName];
-    script.remove();
-  };
-  const script = document.createElement("script");
-  script.src = `${CONFIG.API_URL}?action=listar&callback=${cbName}&_=${Date.now()}`;
-  script.onerror = ()=>{ state.history = []; renderHistory(); toast("No se pudo cargar el historial. Revisa CONFIG.API_URL."); };
-  document.body.appendChild(script);
+  const regs = await fetchHistorialJSONP();
+  state.history = regs;
+  renderHistory();
+  if (!regs.length) { /* puede ser normal (sin registros) o CONFIG.API_URL mal puesta */ }
 }
 
 function guardarRegistro(){
@@ -477,78 +492,45 @@ function guardarRegistro(){
 }
 
 // =============================================================================
-// Generar Excel (SheetJS) — solo datos, sin imágenes
+// Generar Excel — se pide al backend (Apps Script), que arma el archivo
+// con formato completo (negritas, fusiones, monedas, % y fotos incrustadas)
 // =============================================================================
+function fetchExcelJSONP(punto, fecha){
+  return new Promise((resolve)=>{
+    const cbName = "cbx_" + Date.now() + "_" + Math.floor(Math.random()*10000);
+    const script = document.createElement("script");
+    const cleanup = ()=>{ delete window[cbName]; script.remove(); };
+    window[cbName] = function(data){ resolve(data); cleanup(); };
+    script.onerror = ()=>{ resolve({ ok:false, error:"No se pudo contactar al servidor." }); cleanup(); };
+    script.src = `${CONFIG.API_URL}?action=excel&punto=${encodeURIComponent(punto)}&fecha=${encodeURIComponent(fecha)}&callback=${cbName}&_=${Date.now()}`;
+    document.body.appendChild(script);
+  });
+}
+
+async function pedirYAbrirExcel(punto, fecha, btn){
+  const prevHtml = btn ? btn.innerHTML : null;
+  if (btn){ btn.disabled = true; btn.textContent = "Generando Excel..."; }
+  const data = await fetchExcelJSONP(punto, fecha);
+  if (btn){ btn.disabled = false; btn.innerHTML = prevHtml; }
+  if (data && data.ok && data.url){
+    window.open(data.url, "_blank");
+  } else {
+    toast((data && data.error) ? data.error : "No se pudo generar el Excel.");
+  }
+}
+
 function generarExcelDesdeEstado(){
-  const d = derived();
-  const p = punto();
-  const record = {
-    punto: state.puntoCod, contrato: p.contrato, responsable: p.responsable, cedula: p.cedula,
-    fechaReposicion: state.fechaReposicion, fechaInicio: toISODate(d.fechaInicio), fechaFin: toISODate(d.fechaFin),
-    dias: state.dias.map(v=>Number(v)||0), totalGas: d.totalGas, servicios: d.serviciosNum,
-    costo: d.costo, ratio: d.ratioPct, valor: d.valor, nImagenes: state.imagenes.length,
-  };
-  construirYDescargarExcel(record);
+  if (!state.saved){
+    toast("Guarda el registro primero.");
+    return;
+  }
+  pedirYAbrirExcel(state.puntoCod, state.fechaReposicion, document.getElementById("btnExcel"));
 }
 
 function descargarExcelDesdeRegistro(r){
-  const record = {
-    punto: r.Punto, contrato: r.Contrato, responsable: r.Responsable, cedula: r.Cedula,
-    fechaReposicion: r.FechaReposicion, fechaInicio: r.FechaInicio, fechaFin: r.FechaFin,
-    dias: [r.Dia1,r.Dia2,r.Dia3,r.Dia4,r.Dia5,r.Dia6,r.Dia7].map(v=>Number(v)||0),
-    totalGas: Number(r.TotalGas), servicios: Number(r.Servicios), costo: Number(r.Costo),
-    ratio: Number(r.Ratio), valor: Number(r.Valor), nImagenes: (r.Imagenes||[]).length,
-  };
-  construirYDescargarExcel(record);
+  pedirYAbrirExcel(r.Punto, r.FechaReposicion, null);
 }
 
-function construirYDescargarExcel(record){
-  const fi = new Date(record.fechaInicio+"T00:00:00");
-  const consumoRows = [
-    ["CONSUMO SEMANAL DE GAS"], [],
-    ["Punto", record.contrato],
-    ["Responsable", record.responsable],
-    ["Cédula", record.cedula],
-    ["Fecha de reposición", record.fechaReposicion],
-    ["Periodo", `${record.fechaInicio} al ${record.fechaFin}`], [],
-    ["Día","Fecha","Tanques"],
-    ...record.dias.map((v,i)=>{
-      const dd = new Date(fi); dd.setDate(dd.getDate()+i);
-      return [DIAS_LABELS[i], toISODate(dd), v];
-    }), [],
-    ["TOTAL GAS", record.totalGas],
-    ["SERVICIOS", record.servicios],
-    ["COSTO (por servicio)", Number(record.costo.toFixed(6))],
-    ["RATIO (%)", Number((record.ratio/100).toFixed(6))],
-    ["VALOR A TRANSFERIR", Number(record.valor.toFixed(2))],
-  ];
-
-  const detalle = `Pago por compra ${record.totalGas} tanques de gas del ${record.fechaInicio} al ${record.fechaFin}`;
-  const cchhRows = [
-    ["GRUPO  HANASKA"], ["TECFOOD SERVICIOS DE ALIMENTACIÓN S.A."], ["REPOSICIÓN FONDO DE CAJA CHICA - ANEXO 2"], [],
-    ["RESPONSABLE:", record.responsable, "", "Cédula Ciudadanía:", record.cedula, "", "CONTRATO:", record.contrato],
-    ["FECHA REPOSICION:", record.fechaReposicion, "", "CIUDAD:", CIUDAD, "", "Valor Fondo:", (PUNTOS.find(p=>p.codigo===record.punto)||{}).valorFondo || ""],
-    [],
-    ["FECHA","RUC","PROVEEDOR","DETALLE","","CENTRO DE COSTO/CONTRATO","TIPO DOCUM","VALOR","TOTAL ACUMULADO"],
-    ["DOCUMENTOS NO VÁLIDOS PARA LA ADMINISTRACION TRIBUTARIA"],
-    [record.fechaReposicion, PROVEEDOR.ruc, PROVEEDOR.nombre, detalle, "", record.contrato, "recibo", Number(record.valor.toFixed(2)), Number(record.valor.toFixed(2))],
-    [],
-    [`Evidencia fotográfica adjunta en el sistema: ${record.nImagenes} archivo(s) — ver historial`],
-  ];
-
-  const wb = XLSX.utils.book_new();
-  const wsConsumo = XLSX.utils.aoa_to_sheet(consumoRows);
-  wsConsumo["!cols"] = [{wch:24},{wch:16},{wch:12}];
-  // Fila 21 = ["RATIO (%)", valor] -> formatear esa celda como porcentaje, igual que el Excel original
-  const filaRatio = consumoRows.findIndex(r => r[0] === "RATIO (%)") + 1; // 1-indexed
-  const celdaRatio = XLSX.utils.encode_cell({ r: filaRatio - 1, c: 1 });
-  if (wsConsumo[celdaRatio]) wsConsumo[celdaRatio].z = "0.0%";
-  const wsCchh = XLSX.utils.aoa_to_sheet(cchhRows);
-  wsCchh["!cols"] = [{wch:20},{wch:16},{wch:26},{wch:40},{wch:4},{wch:20},{wch:12},{wch:12},{wch:14}];
-  XLSX.utils.book_append_sheet(wb, wsConsumo, `CONSUMO ${record.punto}`);
-  XLSX.utils.book_append_sheet(wb, wsCchh, `CCHH ${record.punto}`);
-  XLSX.writeFile(wb, `CCHH_CONSUMO_${record.punto}_${record.fechaReposicion}.xlsx`);
-}
 
 // =============================================================================
 // Eventos globales
