@@ -123,7 +123,7 @@
           <div class="res"><div class="l">Costo / servicio</div><div class="v" id="costoOut">$0.0000</div></div>
           <div class="res"><div class="l">Valor a transferir</div><div class="v hi" id="valorOut">$0.00</div></div>
         </div>
-        <div class="ratiorow"><span class="lab">RATIO</span><span id="ratioLabel" style="font-weight:800;">0.00 / 7</span></div>
+        <div class="ratiorow"><span class="lab">RATIO</span><span id="ratioLabel" style="font-weight:800;">0.0% / 7%</span></div>
         <div class="bar"><div id="ratioBar" style="width:0%;background:var(--green);"></div></div>
         <div id="alertBox"></div>
       </div>
@@ -221,12 +221,13 @@ function derived(){
   const totalGas = state.dias.reduce((s,v)=>s+(Number(v)||0),0);
   const serviciosNum = Number(state.servicios)||0;
   const costo = serviciosNum>0 ? (totalGas*PRECIO_TANQUE)/serviciosNum : 0;
-  const ratio = serviciosNum>0 ? (totalGas*FACTOR_RATIO)/serviciosNum : 0;
+  const ratioFraccion = serviciosNum>0 ? (totalGas*FACTOR_RATIO)/serviciosNum : 0; // ej. 0.0589
+  const ratioPct = ratioFraccion*100; // ej. 5.89 (%)
   const valor = totalGas*PRECIO_TANQUE;
-  const bloqueado = ratio >= RATIO_LIMITE;
+  const bloqueado = ratioPct >= RATIO_LIMITE;
   const fechaFin = addDaysISO(state.fechaReposicion, -1);
   const fechaInicio = addDaysISO(state.fechaReposicion, -7);
-  return { totalGas, serviciosNum, costo, ratio, valor, bloqueado, fechaFin, fechaInicio };
+  return { totalGas, serviciosNum, costo, ratioFraccion, ratioPct, valor, bloqueado, fechaFin, fechaInicio };
 }
 
 // =============================================================================
@@ -272,16 +273,16 @@ function renderResults(){
   document.getElementById("totalGasOut").textContent = `${d.totalGas} tanques`;
   document.getElementById("costoOut").textContent = `$${d.costo.toFixed(4)}`;
   document.getElementById("valorOut").textContent = money(d.valor);
-  document.getElementById("ratioLabel").textContent = `${d.ratio.toFixed(2)} / ${RATIO_LIMITE}`;
+  document.getElementById("ratioLabel").textContent = `${d.ratioPct.toFixed(1)}% / ${RATIO_LIMITE}%`;
   document.getElementById("ratioLabel").style.color = d.bloqueado ? "#C0392B" : "#1F8A57";
-  const pct = Math.min(100, (d.ratio/RATIO_LIMITE)*100);
+  const pct = Math.min(100, (d.ratioPct/RATIO_LIMITE)*100);
   const bar = document.getElementById("ratioBar");
   bar.style.width = pct+"%";
   bar.style.background = d.bloqueado ? "var(--red)" : "var(--green)";
 
   const alertBox = document.getElementById("alertBox");
   if (d.bloqueado){
-    alertBox.innerHTML = `<div class="alert bad">⚠️ <div><strong>No se puede generar el archivo CCHH / CONSUMO.</strong> El ratio (${d.ratio.toFixed(2)}) alcanza o supera el límite permitido de ${RATIO_LIMITE}. Revisa el consumo registrado o los servicios ingresados antes de continuar.</div></div>`;
+    alertBox.innerHTML = `<div class="alert bad">⚠️ <div><strong>No se puede generar el archivo CCHH / CONSUMO.</strong> El ratio (${d.ratioPct.toFixed(1)}%) alcanza o supera el límite permitido de ${RATIO_LIMITE}%. Revisa el consumo registrado o los servicios ingresados antes de continuar.</div></div>`;
   } else if (d.serviciosNum>0 && d.totalGas>0){
     alertBox.innerHTML = `<div class="alert ok">✅ <div>Ratio dentro del límite permitido. Puedes guardar y generar el archivo.</div></div>`;
   } else {
@@ -321,14 +322,14 @@ function renderHistory(){
   }
   status.textContent = "";
   list.innerHTML = state.history.map(r=>{
-    const bloq = Number(r.Ratio) >= RATIO_LIMITE;
+    const bloq = Number(r.Ratio) >= RATIO_LIMITE;  // Ratio se guarda ya en porcentaje (ej. 5.89 = 5.89%)
     const p = PUNTOS.find(x=>x.codigo===r.Punto) || {};
     const nImgs = (r.Imagenes||[]).length;
     return `
       <div class="hist-item">
         <div class="hist-top">
           <div class="hist-title">${r.Punto} — ${p.contrato||r.Contrato||""}</div>
-          <span class="badge ${bloq?"bad":"ok"}">ratio ${Number(r.Ratio).toFixed(2)}</span>
+          <span class="badge ${bloq?"bad":"ok"}">ratio ${Number(r.Ratio).toFixed(1)}%</span>
         </div>
         <div class="hist-sub">Reposición ${r.FechaReposicion} · ${r.FechaInicio} al ${r.FechaFin}</div>
         <div class="hist-bottom">
@@ -353,7 +354,7 @@ function renderHistory(){
 function renderAll(){
   renderSelect(); renderChips(); renderDias(); renderResults(); renderThumbs(); renderHistory();
   document.getElementById("footnote").textContent =
-    `Umbral de bloqueo: ratio ≥ ${RATIO_LIMITE} · Precio por tanque: ${money(PRECIO_TANQUE)} · Proveedor: ${PROVEEDOR.nombre} (RUC ${PROVEEDOR.ruc})`;
+    `Umbral de bloqueo: ratio ≥ ${RATIO_LIMITE}% · Precio por tanque: ${money(PRECIO_TANQUE)} · Proveedor: ${PROVEEDOR.nombre} (RUC ${PROVEEDOR.ruc})`;
   document.getElementById("cfgwarn").style.display = CONFIG.API_URL.indexOf("PEGA_AQUI") === 0 ? "block" : "none";
 }
 
@@ -445,7 +446,7 @@ function guardarRegistro(){
     totalGas: d.totalGas,
     servicios: d.serviciosNum,
     costo: d.costo,
-    ratio: d.ratio,
+    ratio: d.ratioPct,
     valor: d.valor,
     bloqueado: d.bloqueado ? "true" : "false",
     imagenes: JSON.stringify(state.imagenes),
@@ -485,7 +486,7 @@ function generarExcelDesdeEstado(){
     punto: state.puntoCod, contrato: p.contrato, responsable: p.responsable, cedula: p.cedula,
     fechaReposicion: state.fechaReposicion, fechaInicio: toISODate(d.fechaInicio), fechaFin: toISODate(d.fechaFin),
     dias: state.dias.map(v=>Number(v)||0), totalGas: d.totalGas, servicios: d.serviciosNum,
-    costo: d.costo, ratio: d.ratio, valor: d.valor, nImagenes: state.imagenes.length,
+    costo: d.costo, ratio: d.ratioPct, valor: d.valor, nImagenes: state.imagenes.length,
   };
   construirYDescargarExcel(record);
 }
@@ -518,7 +519,7 @@ function construirYDescargarExcel(record){
     ["TOTAL GAS", record.totalGas],
     ["SERVICIOS", record.servicios],
     ["COSTO (por servicio)", Number(record.costo.toFixed(6))],
-    ["RATIO", Number(record.ratio.toFixed(6))],
+    ["RATIO (%)", Number((record.ratio/100).toFixed(6))],
     ["VALOR A TRANSFERIR", Number(record.valor.toFixed(2))],
   ];
 
@@ -538,6 +539,10 @@ function construirYDescargarExcel(record){
   const wb = XLSX.utils.book_new();
   const wsConsumo = XLSX.utils.aoa_to_sheet(consumoRows);
   wsConsumo["!cols"] = [{wch:24},{wch:16},{wch:12}];
+  // Fila 21 = ["RATIO (%)", valor] -> formatear esa celda como porcentaje, igual que el Excel original
+  const filaRatio = consumoRows.findIndex(r => r[0] === "RATIO (%)") + 1; // 1-indexed
+  const celdaRatio = XLSX.utils.encode_cell({ r: filaRatio - 1, c: 1 });
+  if (wsConsumo[celdaRatio]) wsConsumo[celdaRatio].z = "0.0%";
   const wsCchh = XLSX.utils.aoa_to_sheet(cchhRows);
   wsCchh["!cols"] = [{wch:20},{wch:16},{wch:26},{wch:40},{wch:4},{wch:20},{wch:12},{wch:12},{wch:14}];
   XLSX.utils.book_append_sheet(wb, wsConsumo, `CONSUMO ${record.punto}`);
