@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Control Semanal de Consumo de Gas — Hanaska</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --navy:#002060; --navy-ink:#1B2431; --muted:#5B6478; --faint:#8A93A6;
+    --bg:#F3F5F9; --card:#ffffff; --line:#E3E7EF; --soft:#F7F8FC;
+    --green:#2FAE72; --green-bg:#EAF7F0; --green-line:#BCE6CD; --green-ink:#1F5A3E;
+    --red:#E0503E; --red-bg:#FDECEA; --red-line:#F3B6AE; --red-ink:#8A2E23;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--navy-ink);}
+  .wrap{max-width:980px;margin:0 auto;padding:24px 16px;}
+  .header{display:flex;align-items:center;gap:14px;margin-bottom:20px;}
+  .logo{width:46px;height:46px;border-radius:12px;background:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;}
+  .title{font-size:20px;font-weight:800;color:var(--navy);letter-spacing:.2px;}
+  .subtitle{font-size:13px;color:var(--muted);}
+  .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:start;}
+  @media (max-width:820px){.grid{grid-template-columns:1fr;}}
+  .card{background:var(--card);border-radius:16px;padding:22px;box-shadow:0 1px 3px rgba(20,30,60,.08);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+  label.field{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:#3B4254;}
+  input, select{border:1.5px solid var(--line);border-radius:9px;padding:9px 10px;font-size:13.5px;font-family:inherit;color:var(--navy-ink);background:#fff;width:100%;}
+  input:focus, select:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(0,32,96,.12);}
+  .chips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;}
+  @media (max-width:600px){.chips{grid-template-columns:repeat(2,1fr);}}
+  .chip{background:var(--soft);border-radius:10px;padding:8px 10px;}
+  .chip .l{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.3px;}
+  .chip .v{font-size:12.5px;font-weight:700;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .periodo{font-size:12.5px;color:var(--muted);margin-bottom:10px;}
+  .section-label{font-size:11.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;}
+  .dias{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:16px;}
+  .dias .d{font-size:10.5px;color:var(--faint);margin-bottom:4px;text-align:center;}
+  .dias input{text-align:center;padding:8px 4px;}
+  .results{background:var(--soft);border-radius:12px;padding:16px;margin-bottom:16px;}
+  .res3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;}
+  .res .l{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.3px;}
+  .res .v{font-size:17px;font-weight:800;margin-top:2px;}
+  .res .v.hi{color:var(--navy);}
+  .ratiorow{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;}
+  .ratiorow .lab{color:var(--muted);font-weight:600;}
+  .bar{height:10px;border-radius:6px;background:#E3E7EF;overflow:hidden;}
+  .bar>div{height:100%;transition:width .25s;}
+  .alert{margin-top:12px;display:flex;gap:8px;align-items:flex-start;border-radius:10px;padding:10px 12px;font-size:12.5px;}
+  .alert.bad{background:var(--red-bg);border:1px solid var(--red-line);color:var(--red-ink);}
+  .alert.ok{background:var(--green-bg);border:1px solid var(--green-line);color:var(--green-ink);align-items:center;}
+  .upload{display:inline-flex;align-items:center;gap:8px;border:1.5px dashed #C7CDDB;border-radius:10px;padding:12px 14px;cursor:pointer;font-size:12.5px;color:var(--muted);width:fit-content;}
+  .thumbs{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:10px;}
+  @media (max-width:600px){.thumbs{grid-template-columns:repeat(3,1fr);}}
+  .thumb{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1;}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .thumb button{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.55);border:none;border-radius:50%;width:18px;height:18px;color:#fff;cursor:pointer;font-size:11px;line-height:1;}
+  .hint{font-size:11px;color:var(--faint);margin-top:6px;}
+  .errmsg{color:#C0392B;font-size:12.5px;margin-bottom:10px;}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap;}
+  button.primary{display:inline-flex;align-items:center;gap:8px;background:var(--navy);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-size:13.5px;font-weight:700;cursor:pointer;}
+  button.secondary{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--navy);border:1.5px solid var(--navy);border-radius:10px;padding:11px 18px;font-size:13.5px;font-weight:700;cursor:pointer;}
+  button:disabled{opacity:.45;cursor:not-allowed !important;}
+  .hist-head{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-weight:800;color:var(--navy);font-size:14.5px;}
+  .hist-list{display:flex;flex-direction:column;gap:10px;max-height:640px;overflow-y:auto;}
+  .hist-item{border:1px solid #E9ECF3;border-radius:12px;padding:12px;}
+  .hist-top{display:flex;justify-content:space-between;align-items:center;}
+  .hist-title{font-weight:700;font-size:13px;}
+  .badge{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:20px;}
+  .badge.ok{background:var(--green-bg);color:var(--green-ink);}
+  .badge.bad{background:var(--red-bg);color:var(--red-ink);}
+  .hist-sub{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .hist-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:8px;}
+  .tinybtn{display:inline-flex;align-items:center;gap:4px;background:var(--soft);color:var(--navy);border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;}
+  .footnote{font-size:11px;color:var(--faint);margin-top:18px;text-align:center;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1B2431;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.2);display:none;z-index:50;}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .cfgwarn{background:#FFF6E5;border:1px solid #F3D98B;color:#7A5B00;border-radius:10px;padding:10px 14px;font-size:12.5px;margin-bottom:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="logo">🔥</div>
+    <div>
+      <div class="title">Control Semanal de Consumo de Gas</div>
+      <div class="subtitle">Grupo Hanaska — Reposición de fondo de caja chica por punto</div>
+    </div>
+  </div>
+
+  <div id="cfgwarn" class="cfgwarn" style="display:none;">
+    ⚠️ Falta configurar la URL del backend (Google Apps Script). Edita <code>CONFIG.API_URL</code> en el archivo <code>index.html</code>.
+  </div>
+
+  <div class="grid">
+    <!-- FORM -->
+    <div class="card">
+      <div class="row2">
+        <label class="field">Punto
+          <select id="puntoCod"></select>
+        </label>
+        <label class="field">Fecha de reposición
+          <input type="date" id="fechaReposicion" />
+        </label>
+      </div>
+
+      <div class="chips" id="chips"></div>
+
+      <div class="periodo" id="periodo"></div>
+
+      <div style="margin-bottom:16px;">
+        <div class="section-label">Tanques de gas consumidos por día</div>
+        <div class="dias" id="dias"></div>
+      </div>
+
+      <label class="field" style="margin-bottom:16px;">Servicios atendidos en la semana
+        <input inputmode="numeric" id="servicios" placeholder="Ej. 1970" />
+      </label>
+
+      <div class="results">
+        <div class="res3">
+          <div class="res"><div class="l">Total gas</div><div class="v" id="totalGasOut">0 tanques</div></div>
+          <div class="res"><div class="l">Costo / servicio</div><div class="v" id="costoOut">$0.0000</div></div>
+          <div class="res"><div class="l">Valor a transferir</div><div class="v hi" id="valorOut">$0.00</div></div>
+        </div>
+        <div class="ratiorow"><span class="lab">RATIO</span><span id="ratioLabel" style="font-weight:800;">0.00 / 7</span></div>
+        <div class="bar"><div id="ratioBar" style="width:0%;background:var(--green);"></div></div>
+        <div id="alertBox"></div>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div class="section-label">Evidencia fotográfica (recibos y comprobantes)</div>
+        <label class="upload">
+          📎 Subir fotos (máx. 6)
+          <input type="file" id="fileInput" accept="image/*" multiple style="display:none;" />
+        </label>
+        <div class="thumbs" id="thumbs"></div>
+        <div class="hint">Las imágenes se suben a Google Drive y quedan enlazadas al registro compartido con el equipo.</div>
+      </div>
+
+      <div id="errBox"></div>
+
+      <div class="btnrow">
+        <button class="primary" id="btnGuardar">💾 <span id="btnGuardarLabel">Guardar registro</span></button>
+        <button class="secondary" id="btnExcel">⬇️ Generar Excel (CCHH + Consumo)</button>
+      </div>
+    </div>
+
+    <!-- HISTORIAL -->
+    <div class="card">
+      <div class="hist-head">📋 Historial compartido</div>
+      <div id="histStatus" style="font-size:12.5px;color:var(--faint);">Cargando registros…</div>
+      <div class="hist-list" id="histList"></div>
+    </div>
+  </div>
+
+  <div class="footnote" id="footnote"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<iframe name="hidden_iframe" style="display:none;"></iframe>
+<form id="postForm" method="POST" target="hidden_iframe" style="display:none;"></form>
+
+<script>
+// =============================================================================
+// CONFIGURACIÓN — pega aquí la URL de tu Google Apps Script (termina en /exec)
+// =============================================================================
+const CONFIG = {
+  API_URL: "https://script.google.com/macros/s/AKfycbyfmm555tRAwlJyiE9trRbNYT3HQMAFDt39hN0vI4saF5HhxjYATc9lU_PnBLY5FsdK/exec",
+};
+
+// =============================================================================
+// Datos de referencia
+// =============================================================================
+const PROVEEDOR = { ruc: "1712741121", nombre: "Edwin Marcelo Cachipuendo Vargas" };
+const CIUDAD = "Cayambe";
+const PRECIO_TANQUE = 4.25;
+const FACTOR_RATIO = 15;
+const RATIO_LIMITE = 7;
+
+const PUNTOS = [
+  { codigo: "R1", responsable: "Alex Villamarín", cedula: "0401174883", contrato: "ROSAPRIMA 1", valorFondo: 400, serviciosRef: 10433 },
+  { codigo: "R2", responsable: "Rubén Jiménez", cedula: "0401174883", contrato: "ROSAPRIMA 2", valorFondo: 110, serviciosRef: 2698 },
+  { codigo: "R3", responsable: "Marcelo Chimarro", cedula: "1714917174", contrato: "ROSAPRIMA 3", valorFondo: 110, serviciosRef: 2596 },
+  { codigo: "R4", responsable: "Jhonathan Tayo", cedula: "1721103271", contrato: "ROSAPRIMA 4", valorFondo: 75, serviciosRef: 1970 },
+  { codigo: "R5", responsable: "Carlos Velástegui", cedula: "1714036629", contrato: "ROSAPRIMA 5", valorFondo: 75, serviciosRef: 1970 },
+  { codigo: "R6", responsable: "David Tituaña", cedula: "1714036629", contrato: "ROSAPRIMA 6", valorFondo: 75, serviciosRef: 2957 },
+  { codigo: "R7", responsable: "Pablo Pilco", cedula: "1716317779", contrato: "ROSAPRIMA 7", valorFondo: 60, serviciosRef: 1715 },
+  { codigo: "TP", responsable: "Edin Rueda", cedula: "1755681598", contrato: "TESSA PICASSO", valorFondo: 35, serviciosRef: 959 },
+  { codigo: "PT", responsable: "Edison Tituaña", cedula: "1003859434", contrato: "PONTE TRESA", valorFondo: 30, serviciosRef: 764 },
+];
+const DIAS_LABELS = ["Día 1","Día 2","Día 3","Día 4","Día 5","Día 6","Día 7"];
+
+// =============================================================================
+// Estado
+// =============================================================================
+let state = {
+  puntoCod: PUNTOS[0].codigo,
+  fechaReposicion: toISODate(new Date()),
+  dias: ["","","","","","",""],
+  servicios: "",
+  imagenes: [],
+  saving: false,
+  saved: false,
+  history: [],
+};
+
+// =============================================================================
+// Utilidades de fecha / formato
+// =============================================================================
+function toISODate(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), day=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${day}`; }
+function addDaysISO(iso, n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return d; }
+function fmtDate(d){ return d.toLocaleDateString("es-EC",{day:"2-digit",month:"2-digit",year:"numeric"}); }
+function money(n){ return `$${(Number(n)||0).toFixed(2)}`; }
+function punto(){ return PUNTOS.find(p=>p.codigo===state.puntoCod); }
+
+// =============================================================================
+// Cálculos derivados
+// =============================================================================
+function derived(){
+  const totalGas = state.dias.reduce((s,v)=>s+(Number(v)||0),0);
+  const serviciosNum = Number(state.servicios)||0;
+  const costo = serviciosNum>0 ? (totalGas*PRECIO_TANQUE)/serviciosNum : 0;
+  const ratio = serviciosNum>0 ? (totalGas*FACTOR_RATIO)/serviciosNum : 0;
+  const valor = totalGas*PRECIO_TANQUE;
+  const bloqueado = ratio >= RATIO_LIMITE;
+  const fechaFin = addDaysISO(state.fechaReposicion, -1);
+  const fechaInicio = addDaysISO(state.fechaReposicion, -7);
+  return { totalGas, serviciosNum, costo, ratio, valor, bloqueado, fechaFin, fechaInicio };
+}
+
+// =============================================================================
+// Render
+// =============================================================================
+function renderSelect(){
+  const sel = document.getElementById("puntoCod");
+  sel.innerHTML = PUNTOS.map(p=>`<option value="${p.codigo}" ${p.codigo===state.puntoCod?"selected":""}>${p.codigo} — ${p.contrato}</option>`).join("");
+}
+
+function renderChips(){
+  const p = punto();
+  document.getElementById("chips").innerHTML = `
+    <div class="chip"><div class="l">Responsable</div><div class="v">${p.responsable}</div></div>
+    <div class="chip"><div class="l">Cédula</div><div class="v">${p.cedula}</div></div>
+    <div class="chip"><div class="l">Contrato</div><div class="v">${p.contrato}</div></div>
+    <div class="chip"><div class="l">Valor fondo</div><div class="v">${money(p.valorFondo)}</div></div>
+  `;
+}
+
+function renderDias(){
+  const d = derived();
+  document.getElementById("periodo").innerHTML = `Periodo: <strong>${fmtDate(d.fechaInicio)}</strong> al <strong>${fmtDate(d.fechaFin)}</strong>`;
+  document.getElementById("dias").innerHTML = DIAS_LABELS.map((lab,i)=>`
+    <div>
+      <div class="d">${fmtDate(addDaysISO(toISODate(d.fechaInicio), i))}</div>
+      <input inputmode="numeric" data-dia="${i}" value="${state.dias[i]}" placeholder="0" />
+    </div>
+  `).join("");
+  document.querySelectorAll("[data-dia]").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const i = Number(e.target.dataset.dia);
+      state.dias[i] = e.target.value.replace(/[^0-9]/g,"");
+      e.target.value = state.dias[i];
+      state.saved = false;
+      renderResults();
+    });
+  });
+}
+
+function renderResults(){
+  const d = derived();
+  document.getElementById("totalGasOut").textContent = `${d.totalGas} tanques`;
+  document.getElementById("costoOut").textContent = `$${d.costo.toFixed(4)}`;
+  document.getElementById("valorOut").textContent = money(d.valor);
+  document.getElementById("ratioLabel").textContent = `${d.ratio.toFixed(2)} / ${RATIO_LIMITE}`;
+  document.getElementById("ratioLabel").style.color = d.bloqueado ? "#C0392B" : "#1F8A57";
+  const pct = Math.min(100, (d.ratio/RATIO_LIMITE)*100);
+  const bar = document.getElementById("ratioBar");
+  bar.style.width = pct+"%";
+  bar.style.background = d.bloqueado ? "var(--red)" : "var(--green)";
+
+  const alertBox = document.getElementById("alertBox");
+  if (d.bloqueado){
+    alertBox.innerHTML = `<div class="alert bad">⚠️ <div><strong>No se puede generar el archivo CCHH / CONSUMO.</strong> El ratio (${d.ratio.toFixed(2)}) alcanza o supera el límite permitido de ${RATIO_LIMITE}. Revisa el consumo registrado o los servicios ingresados antes de continuar.</div></div>`;
+  } else if (d.serviciosNum>0 && d.totalGas>0){
+    alertBox.innerHTML = `<div class="alert ok">✅ <div>Ratio dentro del límite permitido. Puedes guardar y generar el archivo.</div></div>`;
+  } else {
+    alertBox.innerHTML = "";
+  }
+
+  document.getElementById("btnExcel").disabled = d.bloqueado || !state.saved;
+  document.getElementById("btnExcel").title = !state.saved ? "Guarda el registro primero" : (d.bloqueado ? "Ratio excede el límite" : "Descargar Excel");
+}
+
+function renderThumbs(){
+  document.getElementById("thumbs").innerHTML = state.imagenes.map((img,i)=>`
+    <div class="thumb"><img src="${img.dataUrl}" /><button data-rm="${i}">✕</button></div>
+  `).join("");
+  document.querySelectorAll("[data-rm]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      state.imagenes.splice(Number(btn.dataset.rm),1);
+      state.saved = false;
+      renderThumbs();
+      renderResults();
+    });
+  });
+}
+
+function renderHistory(){
+  const status = document.getElementById("histStatus");
+  const list = document.getElementById("histList");
+  if (state.history === null){
+    status.textContent = "Cargando registros…";
+    list.innerHTML = "";
+    return;
+  }
+  if (state.history.length === 0){
+    status.textContent = "Aún no hay registros guardados por el equipo.";
+    list.innerHTML = "";
+    return;
+  }
+  status.textContent = "";
+  list.innerHTML = state.history.map(r=>{
+    const bloq = Number(r.Ratio) >= RATIO_LIMITE;
+    const p = PUNTOS.find(x=>x.codigo===r.Punto) || {};
+    const nImgs = (r.Imagenes||[]).length;
+    return `
+      <div class="hist-item">
+        <div class="hist-top">
+          <div class="hist-title">${r.Punto} — ${p.contrato||r.Contrato||""}</div>
+          <span class="badge ${bloq?"bad":"ok"}">ratio ${Number(r.Ratio).toFixed(2)}</span>
+        </div>
+        <div class="hist-sub">Reposición ${r.FechaReposicion} · ${r.FechaInicio} al ${r.FechaFin}</div>
+        <div class="hist-bottom">
+          <div style="font-size:12px;"><strong>${money(r.Valor)}</strong> · ${r.TotalGas} tanques</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            ${nImgs>0 ? `<span style="font-size:11px;color:var(--faint);">🖼 ${nImgs}</span>` : ""}
+            <button class="tinybtn" data-dl="${r.Punto}|${r.FechaReposicion}" ${bloq?"disabled":""}>⬇️ Excel</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+  document.querySelectorAll("[data-dl]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const [cod, fecha] = btn.dataset.dl.split("|");
+      const rec = state.history.find(r=>r.Punto===cod && r.FechaReposicion===fecha);
+      if (rec) descargarExcelDesdeRegistro(rec);
+    });
+  });
+}
+
+function renderAll(){
+  renderSelect(); renderChips(); renderDias(); renderResults(); renderThumbs(); renderHistory();
+  document.getElementById("footnote").textContent =
+    `Umbral de bloqueo: ratio ≥ ${RATIO_LIMITE} · Precio por tanque: ${money(PRECIO_TANQUE)} · Proveedor: ${PROVEEDOR.nombre} (RUC ${PROVEEDOR.ruc})`;
+  document.getElementById("cfgwarn").style.display = CONFIG.API_URL.indexOf("PEGA_AQUI") === 0 ? "block" : "none";
+}
+
+// =============================================================================
+// Imágenes (compresión con canvas)
+// =============================================================================
+function compressImage(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onerror = ()=>reject(new Error("No se pudo leer la imagen"));
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const maxW = 900;
+        const scale = Math.min(1, maxW/img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width*scale);
+        canvas.height = Math.round(img.height*scale);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        resolve({ name: file.name, dataUrl: canvas.toDataURL("image/jpeg",0.72) });
+      };
+      img.onerror = ()=>reject(new Error("Imagen inválida"));
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// =============================================================================
+// Toast
+// =============================================================================
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  setTimeout(()=>{ t.style.display="none"; }, 3000);
+}
+
+// =============================================================================
+// Backend: JSONP (leer) + iframe form POST (guardar)
+// =============================================================================
+function cargarHistorial(){
+  state.history = null;
+  renderHistory();
+  const cbName = "cb_" + Date.now();
+  window[cbName] = function(data){
+    state.history = (data && data.registros) ? data.registros : [];
+    renderHistory();
+    delete window[cbName];
+    script.remove();
+  };
+  const script = document.createElement("script");
+  script.src = `${CONFIG.API_URL}?action=listar&callback=${cbName}&_=${Date.now()}`;
+  script.onerror = ()=>{ state.history = []; renderHistory(); toast("No se pudo cargar el historial. Revisa CONFIG.API_URL."); };
+  document.body.appendChild(script);
+}
+
+function guardarRegistro(){
+  const d = derived();
+  document.getElementById("errBox").innerHTML = "";
+  if (!state.servicios || d.serviciosNum<=0){
+    document.getElementById("errBox").innerHTML = `<div class="errmsg">Ingresa el número de servicios de la semana antes de guardar.</div>`;
+    return;
+  }
+  if (d.totalGas === 0){
+    document.getElementById("errBox").innerHTML = `<div class="errmsg">Ingresa el consumo de gas de al menos un día.</div>`;
+    return;
+  }
+  if (CONFIG.API_URL.indexOf("PEGA_AQUI") === 0){
+    document.getElementById("errBox").innerHTML = `<div class="errmsg">Falta configurar CONFIG.API_URL con la URL de tu Google Apps Script.</div>`;
+    return;
+  }
+
+  state.saving = true;
+  document.getElementById("btnGuardarLabel").textContent = "Guardando...";
+  document.getElementById("btnGuardar").disabled = true;
+
+  const p = punto();
+  const fields = {
+    punto: state.puntoCod,
+    contrato: p.contrato,
+    responsable: p.responsable,
+    cedula: p.cedula,
+    fechaReposicion: state.fechaReposicion,
+    fechaInicio: toISODate(d.fechaInicio),
+    fechaFin: toISODate(d.fechaFin),
+    dias: JSON.stringify(state.dias.map(v=>Number(v)||0)),
+    totalGas: d.totalGas,
+    servicios: d.serviciosNum,
+    costo: d.costo,
+    ratio: d.ratio,
+    valor: d.valor,
+    bloqueado: d.bloqueado ? "true" : "false",
+    imagenes: JSON.stringify(state.imagenes),
+  };
+
+  const form = document.getElementById("postForm");
+  form.innerHTML = "";
+  form.action = CONFIG.API_URL;
+  Object.keys(fields).forEach(k=>{
+    const inp = document.createElement("input");
+    inp.type = "hidden"; inp.name = k; inp.value = fields[k];
+    form.appendChild(inp);
+  });
+
+  const iframe = document.querySelector('iframe[name="hidden_iframe"]');
+  const onLoad = ()=>{
+    iframe.removeEventListener("load", onLoad);
+    state.saving = false;
+    state.saved = true;
+    document.getElementById("btnGuardarLabel").textContent = "Guardar registro";
+    document.getElementById("btnGuardar").disabled = false;
+    toast("Registro guardado y visible para todo el equipo.");
+    renderResults();
+    setTimeout(cargarHistorial, 800);
+  };
+  iframe.addEventListener("load", onLoad);
+  form.submit();
+}
+
+// =============================================================================
+// Generar Excel (SheetJS) — solo datos, sin imágenes
+// =============================================================================
+function generarExcelDesdeEstado(){
+  const d = derived();
+  const p = punto();
+  const record = {
+    punto: state.puntoCod, contrato: p.contrato, responsable: p.responsable, cedula: p.cedula,
+    fechaReposicion: state.fechaReposicion, fechaInicio: toISODate(d.fechaInicio), fechaFin: toISODate(d.fechaFin),
+    dias: state.dias.map(v=>Number(v)||0), totalGas: d.totalGas, servicios: d.serviciosNum,
+    costo: d.costo, ratio: d.ratio, valor: d.valor, nImagenes: state.imagenes.length,
+  };
+  construirYDescargarExcel(record);
+}
+
+function descargarExcelDesdeRegistro(r){
+  const record = {
+    punto: r.Punto, contrato: r.Contrato, responsable: r.Responsable, cedula: r.Cedula,
+    fechaReposicion: r.FechaReposicion, fechaInicio: r.FechaInicio, fechaFin: r.FechaFin,
+    dias: [r.Dia1,r.Dia2,r.Dia3,r.Dia4,r.Dia5,r.Dia6,r.Dia7].map(v=>Number(v)||0),
+    totalGas: Number(r.TotalGas), servicios: Number(r.Servicios), costo: Number(r.Costo),
+    ratio: Number(r.Ratio), valor: Number(r.Valor), nImagenes: (r.Imagenes||[]).length,
+  };
+  construirYDescargarExcel(record);
+}
+
+function construirYDescargarExcel(record){
+  const fi = new Date(record.fechaInicio+"T00:00:00");
+  const consumoRows = [
+    ["CONSUMO SEMANAL DE GAS"], [],
+    ["Punto", record.contrato],
+    ["Responsable", record.responsable],
+    ["Cédula", record.cedula],
+    ["Fecha de reposición", record.fechaReposicion],
+    ["Periodo", `${record.fechaInicio} al ${record.fechaFin}`], [],
+    ["Día","Fecha","Tanques"],
+    ...record.dias.map((v,i)=>{
+      const dd = new Date(fi); dd.setDate(dd.getDate()+i);
+      return [DIAS_LABELS[i], toISODate(dd), v];
+    }), [],
+    ["TOTAL GAS", record.totalGas],
+    ["SERVICIOS", record.servicios],
+    ["COSTO (por servicio)", Number(record.costo.toFixed(6))],
+    ["RATIO", Number(record.ratio.toFixed(6))],
+    ["VALOR A TRANSFERIR", Number(record.valor.toFixed(2))],
+  ];
+
+  const detalle = `Pago por compra ${record.totalGas} tanques de gas del ${record.fechaInicio} al ${record.fechaFin}`;
+  const cchhRows = [
+    ["GRUPO  HANASKA"], ["TECFOOD SERVICIOS DE ALIMENTACIÓN S.A."], ["REPOSICIÓN FONDO DE CAJA CHICA - ANEXO 2"], [],
+    ["RESPONSABLE:", record.responsable, "", "Cédula Ciudadanía:", record.cedula, "", "CONTRATO:", record.contrato],
+    ["FECHA REPOSICION:", record.fechaReposicion, "", "CIUDAD:", CIUDAD, "", "Valor Fondo:", (PUNTOS.find(p=>p.codigo===record.punto)||{}).valorFondo || ""],
+    [],
+    ["FECHA","RUC","PROVEEDOR","DETALLE","","CENTRO DE COSTO/CONTRATO","TIPO DOCUM","VALOR","TOTAL ACUMULADO"],
+    ["DOCUMENTOS NO VÁLIDOS PARA LA ADMINISTRACION TRIBUTARIA"],
+    [record.fechaReposicion, PROVEEDOR.ruc, PROVEEDOR.nombre, detalle, "", record.contrato, "recibo", Number(record.valor.toFixed(2)), Number(record.valor.toFixed(2))],
+    [],
+    [`Evidencia fotográfica adjunta en el sistema: ${record.nImagenes} archivo(s) — ver historial`],
+  ];
+
+  const wb = XLSX.utils.book_new();
+  const wsConsumo = XLSX.utils.aoa_to_sheet(consumoRows);
+  wsConsumo["!cols"] = [{wch:24},{wch:16},{wch:12}];
+  const wsCchh = XLSX.utils.aoa_to_sheet(cchhRows);
+  wsCchh["!cols"] = [{wch:20},{wch:16},{wch:26},{wch:40},{wch:4},{wch:20},{wch:12},{wch:12},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsConsumo, `CONSUMO ${record.punto}`);
+  XLSX.utils.book_append_sheet(wb, wsCchh, `CCHH ${record.punto}`);
+  XLSX.writeFile(wb, `CCHH_CONSUMO_${record.punto}_${record.fechaReposicion}.xlsx`);
+}
+
+// =============================================================================
+// Eventos globales
+// =============================================================================
+document.getElementById("puntoCod").addEventListener("change", e=>{
+  state.puntoCod = e.target.value; state.saved = false; renderChips(); renderResults();
+});
+document.getElementById("fechaReposicion").value = state.fechaReposicion;
+document.getElementById("fechaReposicion").addEventListener("change", e=>{
+  state.fechaReposicion = e.target.value; state.saved = false; renderDias(); renderResults();
+});
+document.getElementById("servicios").addEventListener("input", e=>{
+  state.servicios = e.target.value.replace(/[^0-9]/g,"");
+  e.target.value = state.servicios;
+  state.saved = false;
+  renderResults();
+});
+document.getElementById("fileInput").addEventListener("change", async e=>{
+  const files = Array.from(e.target.files||[]);
+  if (!files.length) return;
+  if (state.imagenes.length + files.length > 6){
+    toast("Máximo 6 imágenes por registro.");
+    e.target.value = "";
+    return;
+  }
+  try{
+    const compressed = await Promise.all(files.map(compressImage));
+    state.imagenes.push(...compressed);
+    state.saved = false;
+    renderThumbs(); renderResults();
+  }catch(err){
+    toast("No se pudieron procesar una o más imágenes.");
+  }
+  e.target.value = "";
+});
+document.getElementById("btnGuardar").addEventListener("click", guardarRegistro);
+document.getElementById("btnExcel").addEventListener("click", generarExcelDesdeEstado);
+
+// =============================================================================
+// Init
+// =============================================================================
+renderAll();
+if (CONFIG.API_URL.indexOf("PEGA_AQUI") !== 0){
+  cargarHistorial();
+} else {
+  state.history = [];
+  renderHistory();
+}
+</script>
+</body>
+</html>
