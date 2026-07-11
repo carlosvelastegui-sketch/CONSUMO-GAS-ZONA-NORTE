@@ -216,6 +216,18 @@ function punto(){ return PUNTOS.find(p=>p.codigo===state.puntoCod); }
 function idADriveThumb(id){ return `https://drive.google.com/thumbnail?id=${id}&sz=w300`; }
 function idADriveView(id){ return `https://drive.google.com/file/d/${id}/view`; }
 
+function fetchImagenBase64JSONP(id){
+  return new Promise((resolve)=>{
+    const cbName = "cbi_" + Date.now() + "_" + Math.floor(Math.random()*10000);
+    const script = document.createElement("script");
+    const cleanup = ()=>{ delete window[cbName]; script.remove(); };
+    window[cbName] = function(data){ resolve(data && data.ok ? data.dataUrl : null); cleanup(); };
+    script.onerror = ()=>{ resolve(null); cleanup(); };
+    script.src = `${CONFIG.API_URL}?action=imagen&id=${encodeURIComponent(id)}&callback=${cbName}&_=${Date.now()}`;
+    document.body.appendChild(script);
+  });
+}
+
 // =============================================================================
 // Cálculos derivados
 // =============================================================================
@@ -354,7 +366,7 @@ function renderHistory(){
     btn.addEventListener("click", ()=>{
       const [cod, fecha] = btn.dataset.dl.split("|");
       const rec = state.history.find(r=>r.Punto===cod && r.FechaReposicion===fecha);
-      if (rec) descargarExcelDesdeRegistro(rec);
+      if (rec) descargarExcelDesdeRegistro(rec, btn);
     });
   });
 }
@@ -507,7 +519,7 @@ function bordeRango(ws, r1, c1, r2, c2){
   }
 }
 
-function construirHojaCCHH(wb, r, imagenesInline, imagenesLinks){
+function construirHojaCCHH(wb, r, imagenesInline){
   const sh = wb.addWorksheet(`CCHH ${r.punto}`, {
     pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
   });
@@ -600,14 +612,16 @@ function construirHojaCCHH(wb, r, imagenesInline, imagenesLinks){
   bordeRango(sh,11,2,11,13);
   bordeRango(sh,13,2,13,13);
   bordeRango(sh,15,2,15,13);
-  bordeRango(sh,17,2,17,13);
+  // Fila 17: bordes solo en Responsable/(f) [B:F] y Autorizado [J:M];
+  // columnas G,H,I quedan sin formato/sin líneas (espacio en blanco entre las dos cajas).
+  bordeRango(sh,17,2,17,6);
+  bordeRango(sh,17,10,17,13);
 
   // Salto de página manual: todo lo de abajo (evidencia fotográfica) imprime
   // como página 2 de esta misma pestaña.
   sh.getRow(17).addPageBreak();
 
-  const tieneEvidencia = (imagenesInline && imagenesInline.length) || (imagenesLinks && imagenesLinks.length);
-  if (tieneEvidencia){
+  if (imagenesInline && imagenesInline.length){
     sh.mergeCells("B19:M19");
     sh.getCell("B19").value = "EVIDENCIA FOTOGRÁFICA";
     sh.getCell("B19").font = { bold:true, size:12 };
@@ -617,7 +631,7 @@ function construirHojaCCHH(wb, r, imagenesInline, imagenesLinks){
     const porFila = 3; // 3 fotos por fila, para que quepan en horizontal
     let enFila = 0;
 
-    (imagenesInline || []).forEach((img) => {
+    imagenesInline.forEach((img) => {
       const match = String(img.dataUrl).match(/^data:image\/(\w+);base64,(.*)$/);
       if (!match) return;
       let ext = match[1].toLowerCase(); if (ext === "jpg") ext = "jpeg";
@@ -627,20 +641,9 @@ function construirHojaCCHH(wb, r, imagenesInline, imagenesLinks){
       enFila++;
       if (enFila >= porFila){ enFila = 0; col = 2; row += 10; }
     });
-    if (enFila > 0) row += 10;
-
-    if (imagenesLinks && imagenesLinks.length){
-      sh.getCell(`B${row}`).value = "Fotos guardadas previamente (ver en Drive):";
-      sh.getCell(`B${row}`).font = { italic:true, size:10 };
-      row += 1;
-      imagenesLinks.forEach((link, i) => {
-        const cell = sh.getCell(`B${row}`);
-        cell.value = { text: `Ver foto ${i+1}`, hyperlink: link };
-        cell.font = { color:{argb:"FF0563C1"}, underline:true };
-        row += 1;
-      });
-    }
   }
+
+  sh.views = [{ showGridLines: false }];
 }
 
 function construirHojaConsumo(wb, r){
@@ -698,17 +701,19 @@ function construirHojaConsumo(wb, r){
   bordeRango(sh,20,2,22,4);
   bordeRango(sh,26,2,26,3);
   bordeRango(sh,26,5,26,8);
+
+  sh.views = [{ showGridLines: false }];
 }
 
 function fmtDMY(iso){ const d=new Date(iso+"T00:00:00"); return d.toLocaleDateString("es-EC",{day:"2-digit",month:"2-digit",year:"numeric"}); }
 function fmtDDMM(iso){ const d=new Date(iso+"T00:00:00"); return `${String(d.getDate()).padStart(2,"0")}-${String(d.getMonth()+1).padStart(2,"0")}`; }
 
-async function generarYDescargarExcel(r, imagenesInline, imagenesLinks){
+async function generarYDescargarExcel(r, imagenesInline){
   if (typeof ExcelJS === "undefined") {
     throw new Error("La librería ExcelJS no cargó (revisa tu conexión o si algo bloquea cdnjs.cloudflare.com). Recarga la página con Ctrl+Shift+R e intenta de nuevo.");
   }
   const wb = new ExcelJS.Workbook();
-  construirHojaCCHH(wb, r, imagenesInline || [], imagenesLinks || []);
+  construirHojaCCHH(wb, r, imagenesInline || []);
   construirHojaConsumo(wb, r);
   console.log("Excel construido OK. Filas CCHH:", wb.getWorksheet(`CCHH ${r.punto}`).rowCount, "| Filas CONSUMO:", wb.getWorksheet(`CONSUMO ${r.punto}`).rowCount);
 
@@ -743,7 +748,7 @@ async function generarExcelDesdeEstado(){
   try {
     // Las fotos recién subidas en esta sesión ya están en memoria (state.imagenes)
     // y se incrustan directamente en el Excel, sin necesidad de volver a descargarlas.
-    await generarYDescargarExcel(record, state.imagenes, []);
+    await generarYDescargarExcel(record, state.imagenes);
   } catch(e){
     console.error("Error generando Excel:", e);
     alert("No se pudo generar el Excel:\n\n" + e.message + "\n\n(revisa la consola con F12 para más detalle, y mándale esto a soporte)");
@@ -753,7 +758,7 @@ async function generarExcelDesdeEstado(){
   }
 }
 
-async function descargarExcelDesdeRegistro(r){
+async function descargarExcelDesdeRegistro(r, btn){
   const record = {
     punto: r.Punto, contrato: r.Contrato, responsable: r.Responsable, cedula: r.Cedula, valorFondo: (PUNTOS.find(p=>p.codigo===r.Punto)||{}).valorFondo || 0,
     fechaReposicion: r.FechaReposicion, fechaInicio: r.FechaInicio, fechaFin: r.FechaFin,
@@ -761,14 +766,23 @@ async function descargarExcelDesdeRegistro(r){
     totalGas: Number(r.TotalGas), servicios: Number(r.Servicios), costo: Number(r.Costo),
     ratio: Number(r.Ratio), valor: Number(r.Valor),
   };
-  // Registros antiguos: las fotos ya no están en memoria del navegador, solo se
-  // enlazan (no se pueden incrustar sin volver a descargarlas desde Drive).
-  const imagenesLinks = (r.Imagenes || []).map(id => idADriveView(id));
+  const prevHtml = btn ? btn.innerHTML : null;
+  if (btn){ btn.disabled = true; btn.textContent = "Trayendo fotos..."; }
   try {
-    await generarYDescargarExcel(record, [], imagenesLinks);
+    // Registros antiguos: las fotos ya no están en memoria del navegador, se traen
+    // desde Drive a través del backend para poder incrustarlas igual que las nuevas.
+    const ids = r.Imagenes || [];
+    const imagenesInline = [];
+    for (const id of ids) {
+      const dataUrl = await fetchImagenBase64JSONP(id);
+      if (dataUrl) imagenesInline.push({ name: `evidencia_${imagenesInline.length+1}.jpg`, dataUrl });
+    }
+    await generarYDescargarExcel(record, imagenesInline);
   } catch(e){
     console.error("Error generando Excel:", e);
     alert("No se pudo generar el Excel:\n\n" + e.message + "\n\n(revisa la consola con F12 para más detalle, y mándale esto a soporte)");
+  } finally {
+    if (btn){ btn.disabled = false; btn.innerHTML = prevHtml; }
   }
 }
 
