@@ -83,7 +83,7 @@
   .tabbtn.active{color:var(--navy);border-bottom-color:var(--navy);}
 
   .reptable{width:100%;border-collapse:collapse;margin-bottom:6px;font-size:12px;}
-  .reptable th{background:var(--navy);color:#fff;text-align:left;padding:7px 9px;font-size:11px;}
+  .reptable th{background:var(--navy);color:#fff;text-align:left;padding:7px 9px;font-size:11px; -webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .reptable td{padding:6px 9px;border-bottom:1px solid var(--line);}
   .reptable tr:nth-child(even) td{background:var(--soft);}
   .reptable td.num, .reptable th.num{text-align:right;}
@@ -109,6 +109,7 @@
     .card{box-shadow:none;border:none;padding:0;}
     #reporteWrap{display:block !important;}
     @page{ size:landscape; margin:12mm; }
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
   }
 
   #pdfReciboArea{display:none;}
@@ -129,7 +130,7 @@
   .rc-spacer-sm td{height:4px;border:none;}
 
   .rc-title{text-align:center;font-weight:800;font-size:19px;padding:6px 0 2px;}
-  .rc-black{background:#000;color:#fff;text-align:center;font-style:italic;font-size:16px;padding:6px 0;}
+  .rc-black{background:#000;color:#fff;text-align:center;font-style:italic;font-size:16px;padding:6px 0; -webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rc-sub{text-align:center;font-size:13px;padding:4px 0;}
 
   .rc-lbl{font-weight:700;white-space:nowrap;font-size:10.5px;}
@@ -139,11 +140,11 @@
   .rc-center{text-align:center;}
   .rc-small{font-size:9.5px;}
   .rc-blue{color:#0070C0;}
-  .rc-fondobg{background:#E2EFDA;}
+  .rc-fondobg{background:#E2EFDA; -webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rc-bold{font-weight:700;}
 
   .rc-thead td{font-size:9px;font-weight:400;text-align:center;}
-  .rc-gris{background:#BFBFBF;font-weight:700;font-style:italic;text-align:center;font-size:11px;}
+  .rc-gris{background:#BFBFBF;font-weight:700;font-style:italic;text-align:center;font-size:11px; -webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rc-data td{font-size:9.5px;}
 
   .rc-totlbl{font-size:11px;}
