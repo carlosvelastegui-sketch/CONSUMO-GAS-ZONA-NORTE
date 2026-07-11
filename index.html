@@ -579,30 +579,30 @@ function construirHojaCCHH(wb, r){
   }
   sh.getRow(9).height = 34;
 
-  sh.getCell("B26").value="TOTAL"; sh.getCell("B26").font={name:"Arial",size:10};
-  sh.getCell("M26").value={formula:"+M9"}; sh.getCell("M26").numFmt='"$" #,##0.00'; sh.getCell("M26").font={name:"Arial",size:10};
+  sh.mergeCells("B11:L11"); sh.getCell("B11").value="TOTAL"; sh.getCell("B11").font={name:"Arial",size:10};
+  sh.getCell("M11").value={formula:"+M9"}; sh.getCell("M11").numFmt='"$" #,##0.00'; sh.getCell("M11").font={name:"Arial",size:10};
 
-  sh.getCell("B28").value="TOTAL VALOR A REEMBOLSAR"; sh.getCell("B28").font={name:"Arial",size:10,bold:true};
-  sh.getCell("M28").value={formula:"+M26"}; sh.getCell("M28").numFmt='"$" #,##0.00'; sh.getCell("M28").font={name:"Arial",size:10,bold:true};
+  sh.mergeCells("B13:L13"); sh.getCell("B13").value="TOTAL VALOR A REEMBOLSAR"; sh.getCell("B13").font={name:"Arial",size:10,bold:true};
+  sh.getCell("M13").value={formula:"+M11"}; sh.getCell("M13").numFmt='"$" #,##0.00'; sh.getCell("M13").font={name:"Arial",size:10,bold:true};
 
-  sh.getCell("B30").value="FONDO CAJA CHICA DISPONIBLE"; sh.getCell("B30").font={name:"Arial",size:10,bold:true};
-  sh.getCell("M30").value={formula:"M6-M28"}; sh.getCell("M30").numFmt='"$" #,##0.00'; sh.getCell("M30").font={name:"Arial",size:10,bold:true};
+  sh.mergeCells("B15:L15"); sh.getCell("B15").value="FONDO CAJA CHICA DISPONIBLE"; sh.getCell("B15").font={name:"Arial",size:10,bold:true};
+  sh.getCell("M15").value={formula:"M6-M13"}; sh.getCell("M15").numFmt='"$" #,##0.00'; sh.getCell("M15").font={name:"Arial",size:10,bold:true};
 
-  sh.getRow(32).height = 45;
-  sh.getCell("B32").value="Responsable:"; sh.getCell("B32").font={name:"Arial",italic:true};
-  sh.mergeCells("C32:D32"); sh.getCell("C32").value={formula:"D5"}; sh.getCell("C32").font={name:"Arial",italic:true,color:{argb:"FF0070C0"}};
-  sh.mergeCells("E32:F32"); sh.getCell("E32").value="(f)"; sh.getCell("E32").font={name:"Arial",italic:true};
-  sh.mergeCells("J32:M32"); sh.getCell("J32").value="Autorizado:        f)\n         \nNombre:"; sh.getCell("J32").font={name:"Arial",italic:true}; sh.getCell("J32").alignment={wrapText:true};
+  sh.getRow(17).height = 45;
+  sh.getCell("B17").value="Responsable:"; sh.getCell("B17").font={name:"Arial",italic:true};
+  sh.mergeCells("C17:D17"); sh.getCell("C17").value={formula:"D5"}; sh.getCell("C17").font={name:"Arial",italic:true,color:{argb:"FF0070C0"}};
+  sh.mergeCells("E17:F17"); sh.getCell("E17").value="(f)"; sh.getCell("E17").font={name:"Arial",italic:true};
+  sh.mergeCells("J17:M17"); sh.getCell("J17").value="Autorizado:        f)\n         \nNombre:"; sh.getCell("J17").font={name:"Arial",italic:true}; sh.getCell("J17").alignment={wrapText:true};
 
   bordeRango(sh,7,2,9,13);
-  bordeRango(sh,26,2,26,13);
-  bordeRango(sh,28,2,28,13);
-  bordeRango(sh,30,2,30,13);
-  bordeRango(sh,32,2,32,13);
+  bordeRango(sh,11,2,11,13);
+  bordeRango(sh,13,2,13,13);
+  bordeRango(sh,15,2,15,13);
+  bordeRango(sh,17,2,17,13);
 
   if (r.tieneEvidencia){
-    sh.getCell("B34").value = `Evidencia fotográfica: ver hoja "EVIDENCIA ${r.punto}"`;
-    sh.getCell("B34").font = { italic:true, size:9 };
+    sh.getCell("B19").value = `Evidencia fotográfica: ver hoja "EVIDENCIA ${r.punto}"`;
+    sh.getCell("B19").font = { italic:true, size:9 };
   }
 }
 
