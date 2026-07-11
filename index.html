@@ -217,6 +217,7 @@
       </div>
       <div id="perfilError" class="errmsg"></div>
       <button class="primary" id="btnConfirmarPerfil" style="width:100%;justify-content:center;margin-top:16px;">Confirmar y continuar</button>
+      <button id="btnCancelarPerfil" style="width:100%;background:none;border:none;color:var(--muted);font-size:12.5px;text-decoration:underline;cursor:pointer;margin-top:12px;">Cancelar y volver a ingresar código</button>
     </div>
   </div>
 
@@ -1411,6 +1412,7 @@ function renderGraficos(filasResumen){
 // rol en cada petición, así que no reemplaza una seguridad real fuerte.
 let session = null; // { codigo, rol, nombre, apellido, cedula, punto, fondo }
 let usuariosConocidos = [];
+let perfilEsEdicionEnVivo = false; // true = se abrió desde "Mi perfil" ya adentro de la app
 
 function cargarSesionGuardada(){
   try {
@@ -1519,6 +1521,7 @@ async function intentarLogin(){
     punto: u.Punto || "", fondo: Number(u.Fondo) || 0,
     primeraVez: !(u.Nombre || u.Apellido), // sin nombre guardado = todavía no confirmó su perfil nunca
   };
+  perfilEsEdicionEnVivo = false;
   mostrarPantallaPerfil();
 }
 
@@ -1628,15 +1631,33 @@ async function confirmarPerfil(){
   await iniciarApp();
 }
 
+function cancelarPerfil(){
+  document.getElementById("perfilError").textContent = "";
+  if (perfilEsEdicionEnVivo && session && session.nombre){
+    // Estaba editando su perfil ya adentro de la app: vuelve a la app tal cual,
+    // sin tocar la sesión ni los datos actuales.
+    document.getElementById("screenPerfil").style.display = "none";
+    document.getElementById("tabsNav").style.display = "";
+    document.getElementById("screenRegistro").style.display = "";
+    cambiarPantalla("registro");
+  } else {
+    // Venía de un login recién hecho (con o sin código equivocado): vuelve al
+    // login sin dejar ninguna sesión a medias.
+    cerrarSesion();
+  }
+}
+
 function renderUserBadge(){
   const b = document.getElementById("userBadge");
   b.style.display = "flex";
   const rolTxt = session.rol === "admin" ? "Administrador" : `Supervisor · ${session.punto}`;
   b.innerHTML = `<span><b>${session.nombre} ${session.apellido}</b></span><span class="rolpill">${rolTxt}</span><button id="btnEditarPerfil">Mi perfil</button><button id="btnCerrarSesion">Salir</button>`;
   document.getElementById("btnEditarPerfil").addEventListener("click", ()=>{
+    perfilEsEdicionEnVivo = true;
     document.getElementById("tabsNav").style.display = "none";
     document.getElementById("screenRegistro").style.display = "none";
     document.getElementById("screenInformes").style.display = "none";
+    document.getElementById("screenUsuarios").style.display = "none";
     mostrarPantallaPerfil();
   });
   document.getElementById("btnCerrarSesion").addEventListener("click", cerrarSesion);
@@ -1835,6 +1856,7 @@ document.getElementById("filtroPuntoTodos").addEventListener("change", (e)=>{
 document.getElementById("btnLogin").addEventListener("click", intentarLogin);
 document.getElementById("loginCodigo").addEventListener("keydown", e=>{ if (e.key==="Enter") intentarLogin(); });
 document.getElementById("btnConfirmarPerfil").addEventListener("click", confirmarPerfil);
+document.getElementById("btnCancelarPerfil").addEventListener("click", cancelarPerfil);
 document.getElementById("btnMostrarRecuperar").addEventListener("click", toggleRecuperar);
 document.getElementById("btnRecuperar").addEventListener("click", recuperarClave);
 document.getElementById("recuperarCedula").addEventListener("keydown", e=>{ if (e.key==="Enter") recuperarClave(); });
