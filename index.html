@@ -507,8 +507,10 @@ function bordeRango(ws, r1, c1, r2, c2){
   }
 }
 
-function construirHojaCCHH(wb, r){
-  const sh = wb.addWorksheet(`CCHH ${r.punto}`);
+function construirHojaCCHH(wb, r, imagenesInline, imagenesLinks){
+  const sh = wb.addWorksheet(`CCHH ${r.punto}`, {
+    pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
   const anchos = { B:11.7,C:13.6,D:16.9,E:16,F:19.9,G:7.3,H:21.4,I:10.3,J:7.7,K:10.6,L:11.6,M:13.6 };
   Object.values(anchos).forEach((w,i)=>{ sh.getColumn(i+2).width = w; });
 
@@ -600,9 +602,44 @@ function construirHojaCCHH(wb, r){
   bordeRango(sh,15,2,15,13);
   bordeRango(sh,17,2,17,13);
 
-  if (r.tieneEvidencia){
-    sh.getCell("B19").value = `Evidencia fotográfica: ver hoja "EVIDENCIA ${r.punto}"`;
-    sh.getCell("B19").font = { italic:true, size:9 };
+  // Salto de página manual: todo lo de abajo (evidencia fotográfica) imprime
+  // como página 2 de esta misma pestaña.
+  sh.getRow(17).addPageBreak();
+
+  const tieneEvidencia = (imagenesInline && imagenesInline.length) || (imagenesLinks && imagenesLinks.length);
+  if (tieneEvidencia){
+    sh.mergeCells("B19:M19");
+    sh.getCell("B19").value = "EVIDENCIA FOTOGRÁFICA";
+    sh.getCell("B19").font = { bold:true, size:12 };
+
+    let row = 21;
+    let col = 2; // columna B
+    const porFila = 3; // 3 fotos por fila, para que quepan en horizontal
+    let enFila = 0;
+
+    (imagenesInline || []).forEach((img) => {
+      const match = String(img.dataUrl).match(/^data:image\/(\w+);base64,(.*)$/);
+      if (!match) return;
+      let ext = match[1].toLowerCase(); if (ext === "jpg") ext = "jpeg";
+      const imgId = wb.addImage({ base64: img.dataUrl, extension: ext });
+      sh.addImage(imgId, { tl:{ col: col-1, row: row-1 }, ext:{ width:230, height:170 } });
+      col += 3;
+      enFila++;
+      if (enFila >= porFila){ enFila = 0; col = 2; row += 10; }
+    });
+    if (enFila > 0) row += 10;
+
+    if (imagenesLinks && imagenesLinks.length){
+      sh.getCell(`B${row}`).value = "Fotos guardadas previamente (ver en Drive):";
+      sh.getCell(`B${row}`).font = { italic:true, size:10 };
+      row += 1;
+      imagenesLinks.forEach((link, i) => {
+        const cell = sh.getCell(`B${row}`);
+        cell.value = { text: `Ver foto ${i+1}`, hyperlink: link };
+        cell.font = { color:{argb:"FF0563C1"}, underline:true };
+        row += 1;
+      });
+    }
   }
 }
 
@@ -663,34 +700,6 @@ function construirHojaConsumo(wb, r){
   bordeRango(sh,26,5,26,8);
 }
 
-async function construirHojaEvidencia(wb, r, imagenesInline, imagenesLinks){
-  const sh = wb.addWorksheet(`EVIDENCIA ${r.punto}`);
-  sh.getColumn(1).width = 45;
-  sh.getCell("A1").value = "Evidencia fotográfica adjunta";
-  sh.getCell("A1").font = { bold:true, size:12 };
-  let row = 3;
-  for (const img of imagenesInline){
-    const match = String(img.dataUrl).match(/^data:image\/(\w+);base64,(.*)$/);
-    if (!match) continue;
-    let ext = match[1].toLowerCase(); if (ext === "jpg") ext = "jpeg";
-    const imgId = wb.addImage({ base64: img.dataUrl, extension: ext });
-    sh.addImage(imgId, { tl:{ col:0, row: row-1 }, ext:{ width:320, height:240 } });
-    sh.getRow(row).height = 180;
-    row += 13;
-  }
-  if (imagenesLinks && imagenesLinks.length){
-    sh.getCell(`A${row}`).value = "Fotos guardadas previamente (ver en Drive):";
-    sh.getCell(`A${row}`).font = { italic:true, size:10 };
-    row += 1;
-    imagenesLinks.forEach((link, i)=>{
-      const cell = sh.getCell(`A${row}`);
-      cell.value = { text: `Ver foto ${i+1}`, hyperlink: link };
-      cell.font = { color:{argb:"FF0563C1"}, underline:true };
-      row += 1;
-    });
-  }
-}
-
 function fmtDMY(iso){ const d=new Date(iso+"T00:00:00"); return d.toLocaleDateString("es-EC",{day:"2-digit",month:"2-digit",year:"numeric"}); }
 function fmtDDMM(iso){ const d=new Date(iso+"T00:00:00"); return `${String(d.getDate()).padStart(2,"0")}-${String(d.getMonth()+1).padStart(2,"0")}`; }
 
@@ -699,10 +708,8 @@ async function generarYDescargarExcel(r, imagenesInline, imagenesLinks){
     throw new Error("La librería ExcelJS no cargó (revisa tu conexión o si algo bloquea cdnjs.cloudflare.com). Recarga la página con Ctrl+Shift+R e intenta de nuevo.");
   }
   const wb = new ExcelJS.Workbook();
-  r.tieneEvidencia = (imagenesInline && imagenesInline.length) || (imagenesLinks && imagenesLinks.length);
-  construirHojaCCHH(wb, r);
+  construirHojaCCHH(wb, r, imagenesInline || [], imagenesLinks || []);
   construirHojaConsumo(wb, r);
-  if (r.tieneEvidencia) await construirHojaEvidencia(wb, r, imagenesInline || [], imagenesLinks || []);
   console.log("Excel construido OK. Filas CCHH:", wb.getWorksheet(`CCHH ${r.punto}`).rowCount, "| Filas CONSUMO:", wb.getWorksheet(`CONSUMO ${r.punto}`).rowCount);
 
   const buffer = await wb.xlsx.writeBuffer();
