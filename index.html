@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Control Semanal de Consumo de Gas — Hanaska</title>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <style>
   :root{
     --navy:#002060; --navy-ink:#1B2431; --muted:#5B6478; --faint:#8A93A6;
@@ -492,43 +493,270 @@ function guardarRegistro(){
 }
 
 // =============================================================================
-// Generar Excel — se pide al backend (Apps Script), que arma el archivo
-// con formato completo (negritas, fusiones, monedas, % y fotos incrustadas)
+// Generar Excel — se arma en el navegador con ExcelJS (control total del
+// formato: negritas, colores, fusiones, bordes y monedas exactas)
 // =============================================================================
-function fetchExcelJSONP(punto, fecha){
-  return new Promise((resolve)=>{
-    const cbName = "cbx_" + Date.now() + "_" + Math.floor(Math.random()*10000);
-    const script = document.createElement("script");
-    const cleanup = ()=>{ delete window[cbName]; script.remove(); };
-    window[cbName] = function(data){ resolve(data); cleanup(); };
-    script.onerror = ()=>{ resolve({ ok:false, error:"No se pudo contactar al servidor." }); cleanup(); };
-    script.src = `${CONFIG.API_URL}?action=excel&punto=${encodeURIComponent(punto)}&fecha=${encodeURIComponent(fecha)}&callback=${cbName}&_=${Date.now()}`;
-    document.body.appendChild(script);
-  });
-}
+const JEFE_OPERATIVO = "David Cerruto";
+const THIN_BORDER = { style: "thin", color: { argb: "FF000000" } };
 
-async function pedirYAbrirExcel(punto, fecha, btn){
-  const prevHtml = btn ? btn.innerHTML : null;
-  if (btn){ btn.disabled = true; btn.textContent = "Generando Excel..."; }
-  const data = await fetchExcelJSONP(punto, fecha);
-  if (btn){ btn.disabled = false; btn.innerHTML = prevHtml; }
-  if (data && data.ok && data.url){
-    window.open(data.url, "_blank");
-  } else {
-    toast((data && data.error) ? data.error : "No se pudo generar el Excel.");
+function bordeRango(ws, r1, c1, r2, c2){
+  for (let r=r1; r<=r2; r++){
+    for (let c=c1; c<=c2; c++){
+      ws.getCell(r,c).border = { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER };
+    }
   }
 }
 
-function generarExcelDesdeEstado(){
+function construirHojaCCHH(wb, r){
+  const sh = wb.addWorksheet(`CCHH ${r.punto}`);
+  const anchos = { B:11.7,C:13.6,D:16.9,E:16,F:19.9,G:7.3,H:21.4,I:10.3,J:7.7,K:10.6,L:11.6,M:13.6 };
+  Object.values(anchos).forEach((w,i)=>{ sh.getColumn(i+2).width = w; });
+
+  const fechaRepo = new Date(r.fechaReposicion+"T00:00:00");
+  const detalle = `Pago por compra ${r.totalGas} tanques de gas del ${fmtDMY(r.fechaInicio)} al ${fmtDMY(r.fechaFin)}`;
+
+  sh.mergeCells("B1:M1");
+  sh.getCell("B1").value = "GRUPO  HANASKA";
+  sh.getCell("B1").font = { name:"Calibri", size:14, bold:true };
+  sh.getCell("B1").alignment = { horizontal:"center", vertical:"middle" };
+
+  sh.mergeCells("B2:M2");
+  sh.getCell("B2").value = "TECFOOD SERVICIOS DE ALIMENTACIÓN S.A.";
+  sh.getCell("B2").font = { name:"Arial", size:14, italic:true, color:{argb:"FFFFFFFF"} };
+  sh.getCell("B2").fill = { type:"pattern", pattern:"solid", fgColor:{argb:"FF000000"} };
+  sh.getCell("B2").alignment = { horizontal:"center", vertical:"middle" };
+
+  sh.mergeCells("B3:M3");
+  sh.getCell("B3").value = "REPOSICIÓN FONDO DE CAJA CHICA - ANEXO 2";
+  sh.getCell("B3").font = { name:"Arial", size:11 };
+  sh.getCell("B3").alignment = { horizontal:"center", vertical:"middle" };
+
+  sh.mergeCells("B5:C5"); sh.getCell("B5").value="RESPONSABLE:"; sh.getCell("B5").font={name:"Arial",size:9,bold:true};
+  sh.mergeCells("D5:G5"); sh.getCell("D5").value=r.responsable; sh.getCell("D5").font={name:"Arial",size:10,italic:true}; sh.getCell("D5").numFmt="@";
+  sh.getCell("H5").value="Cédula Ciudadanía:"; sh.getCell("H5").font={name:"Arial",size:10,bold:true,italic:true};
+  sh.mergeCells("I5:K5"); sh.getCell("I5").value=r.cedula; sh.getCell("I5").font={name:"Arial",size:10,italic:true}; sh.getCell("I5").numFmt="@";
+  sh.getCell("L5").value="CONTRATO:"; sh.getCell("L5").font={name:"Arial",size:9};
+  sh.getCell("M5").value=r.contrato; sh.getCell("M5").font={name:"Arial",size:8,italic:true}; sh.getCell("M5").alignment={horizontal:"center"};
+
+  sh.mergeCells("B6:C6"); sh.getCell("B6").value="FECHA  REPOSICION:"; sh.getCell("B6").font={name:"Arial",size:9,bold:true};
+  sh.mergeCells("D6:G6"); sh.getCell("D6").value=fechaRepo; sh.getCell("D6").numFmt="mm-dd-yy"; sh.getCell("D6").font={name:"Arial",size:10,italic:true};
+  sh.getCell("H6").value="CIUDAD :"; sh.getCell("H6").font={name:"Arial",size:9,bold:true};
+  sh.mergeCells("I6:K6"); sh.getCell("I6").value=CIUDAD; sh.getCell("I6").font={name:"Arial",size:10,italic:true}; sh.getCell("I6").numFmt="@";
+  sh.getCell("L6").value="Valor Fondo:"; sh.getCell("L6").font={name:"Arial",size:10};
+  sh.getCell("L6").fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFE2EFDA"}};
+  sh.getCell("M6").value=r.valorFondo; sh.getCell("M6").numFmt='_ "$"* #,##0.00_ ';
+  sh.getCell("M6").font={name:"Arial",size:10,color:{argb:"FF0070C0"}};
+  sh.getCell("M6").fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFE2EFDA"}};
+  sh.getCell("M6").alignment={horizontal:"center"};
+
+  const headerVals = ["FECHA","RUC","PROVEEDOR","DETALLE","","","","CENTRO DE COSTO/CONTRATO","","TIPO DOCUM","VALOR  ","TOTAL ACUMULADO"];
+  headerVals.forEach((v,i)=>{ sh.getCell(7,i+2).value = v; });
+  sh.mergeCells("E7:H7"); sh.mergeCells("I7:J7");
+  for (let c=2;c<=13;c++){
+    const cell = sh.getCell(7,c);
+    cell.font = { name:"Arial", size:8 };
+    cell.alignment = { horizontal:"center", vertical:"middle", wrapText:true };
+  }
+
+  sh.mergeCells("B8:M8");
+  sh.getCell("B8").value = "DOCUMENTOS  NO  VÁLIDOS  PARA  LA  ADMINISTRACION  TRIBUTARIA";
+  sh.getCell("B8").font = { name:"Arial", size:10, bold:true, italic:true };
+  sh.getCell("B8").fill = { type:"pattern", pattern:"solid", fgColor:{argb:"FFBFBFBF"} };
+  sh.getCell("B8").alignment = { horizontal:"center", vertical:"middle" };
+
+  sh.getCell("B9").value = fechaRepo; sh.getCell("B9").numFmt = "mm-dd-yy";
+  sh.getCell("C9").value = PROVEEDOR.ruc; sh.getCell("C9").numFmt = "@";
+  sh.getCell("D9").value = PROVEEDOR.nombre; sh.getCell("D9").numFmt = "@";
+  sh.mergeCells("E9:H9"); sh.getCell("E9").value = detalle; sh.getCell("E9").numFmt="@"; sh.getCell("E9").alignment = { wrapText:true, vertical:"middle" };
+  sh.mergeCells("I9:J9"); sh.getCell("I9").value = r.contrato; sh.getCell("I9").numFmt="@";
+  sh.getCell("K9").value = "recibo";
+  sh.getCell("L9").value = Number(r.valor); sh.getCell("L9").numFmt = "#,##0.00";
+  sh.getCell("M9").value = { formula: "+L9" }; sh.getCell("M9").numFmt = "#,##0.00";
+  for (let c=2;c<=13;c++){
+    const cell = sh.getCell(9,c);
+    cell.font = { name:"Arial", size:8 };
+    if (![5,9].includes(c)) cell.alignment = { horizontal:"center", vertical:"middle" };
+  }
+  sh.getRow(9).height = 34;
+
+  sh.getCell("B26").value="TOTAL"; sh.getCell("B26").font={name:"Arial",size:10};
+  sh.getCell("M26").value={formula:"+M9"}; sh.getCell("M26").numFmt='"$" #,##0.00'; sh.getCell("M26").font={name:"Arial",size:10};
+
+  sh.getCell("B28").value="TOTAL VALOR A REEMBOLSAR"; sh.getCell("B28").font={name:"Arial",size:10,bold:true};
+  sh.getCell("M28").value={formula:"+M26"}; sh.getCell("M28").numFmt='"$" #,##0.00'; sh.getCell("M28").font={name:"Arial",size:10,bold:true};
+
+  sh.getCell("B30").value="FONDO CAJA CHICA DISPONIBLE"; sh.getCell("B30").font={name:"Arial",size:10,bold:true};
+  sh.getCell("M30").value={formula:"M6-M28"}; sh.getCell("M30").numFmt='"$" #,##0.00'; sh.getCell("M30").font={name:"Arial",size:10,bold:true};
+
+  sh.getRow(32).height = 45;
+  sh.getCell("B32").value="Responsable:"; sh.getCell("B32").font={name:"Arial",italic:true};
+  sh.mergeCells("C32:D32"); sh.getCell("C32").value={formula:"D5"}; sh.getCell("C32").font={name:"Arial",italic:true,color:{argb:"FF0070C0"}};
+  sh.mergeCells("E32:F32"); sh.getCell("E32").value="(f)"; sh.getCell("E32").font={name:"Arial",italic:true};
+  sh.mergeCells("J32:M32"); sh.getCell("J32").value="Autorizado:        f)\n         \nNombre:"; sh.getCell("J32").font={name:"Arial",italic:true}; sh.getCell("J32").alignment={wrapText:true};
+
+  bordeRango(sh,7,2,9,13);
+  bordeRango(sh,26,2,26,13);
+  bordeRango(sh,28,2,28,13);
+  bordeRango(sh,30,2,30,13);
+  bordeRango(sh,32,2,32,13);
+
+  if (r.tieneEvidencia){
+    sh.getCell("B34").value = `Evidencia fotográfica: ver hoja "EVIDENCIA ${r.punto}"`;
+    sh.getCell("B34").font = { italic:true, size:9 };
+  }
+}
+
+function construirHojaConsumo(wb, r){
+  const sh = wb.addWorksheet(`CONSUMO ${r.punto}`);
+  sh.getColumn(2).width=14; sh.getColumn(3).width=16; sh.getColumn(4).width=14;
+  sh.getColumn(6).width=11; sh.getColumn(7).width=11; sh.getColumn(8).width=11;
+
+  const fi = new Date(r.fechaInicio+"T00:00:00");
+  const fr = new Date(r.fechaReposicion+"T00:00:00");
+
+  sh.getCell("C4").value="CONSUMO DE GAS"; sh.getCell("C4").font={name:"Arial",size:12,bold:true};
+  sh.getCell("C5").value=r.contrato; sh.getCell("C5").font={name:"Arial",size:12,bold:true};
+  sh.getCell("B7").value="Supervisor:"; sh.getCell("B7").font={name:"Arial",size:12,bold:true};
+  sh.getCell("C7").value=r.responsable; sh.getCell("C7").font={name:"Arial",size:12};
+  sh.getCell("B8").value="Fecha reporte:"; sh.getCell("B8").font={name:"Arial",size:12,bold:true};
+  sh.getCell("C8").value=fr; sh.getCell("C8").numFmt="mm-dd-yy"; sh.getCell("C8").font={name:"Arial",size:12};
+  sh.getCell("B10").value="PERIODO DE CONSUMO:"; sh.getCell("B10").font={name:"Calibri",size:11,bold:true};
+  sh.mergeCells("C10:D10");
+  sh.getCell("C10").value = `${fmtDDMM(r.fechaInicio)} al ${fmtDDMM(r.fechaFin)}`;
+  sh.getCell("C10").font={name:"Calibri",size:11,bold:true};
+
+  ["FECHA","GAS DOMESTICO (15 KG)","# FACTURA/RECIBO"].forEach((v,i)=>{
+    const cell = sh.getCell(11,i+2); cell.value=v; cell.font={name:"Calibri",size:11,bold:true}; cell.alignment={wrapText:true};
+  });
+  sh.mergeCells("F11:G11"); sh.getCell("F11").value="COSTO UNITARIO "; sh.getCell("F11").font={name:"Calibri",size:11,bold:true};
+  sh.getCell("H11").value=PRECIO_TANQUE; sh.getCell("H11").numFmt='_ "$"* #,##0.00_ '; sh.getCell("H11").font={name:"Arial",size:10};
+
+  for (let i=0;i<7;i++){
+    const dd = new Date(fi); dd.setDate(dd.getDate()+i);
+    sh.getCell(12+i,2).value=dd; sh.getCell(12+i,2).numFmt="mm-dd-yy"; sh.getCell(12+i,2).font={name:"Calibri",size:11};
+    sh.getCell(12+i,3).value=Number(r.dias[i])||0; sh.getCell(12+i,3).font={name:"Calibri",size:11};
+  }
+  sh.mergeCells("F12:G12"); sh.getCell("F12").value="COSTO TOTAL"; sh.getCell("F12").font={name:"Calibri",size:11,bold:true};
+  sh.getCell("H12").value={formula:"H11*C19"}; sh.getCell("H12").numFmt='_ "$"* #,##0.00_ '; sh.getCell("H12").font={name:"Calibri",size:11};
+  sh.mergeCells("F13:G13"); sh.getCell("F13").value="# SERVICIOS"; sh.getCell("F13").font={name:"Calibri",size:11,bold:true};
+  sh.getCell("H13").value=Number(r.servicios); sh.getCell("H13").font={name:"Calibri",size:11};
+  sh.mergeCells("F14:G14"); sh.getCell("F14").value="KG"; sh.getCell("F14").font={name:"Calibri",size:11,bold:true};
+  sh.getCell("H14").value={formula:"C19*15"}; sh.getCell("H14").numFmt="0"; sh.getCell("H14").font={name:"Calibri",size:11};
+  sh.mergeCells("F15:G15"); sh.getCell("F15").value="% CONSUMO"; sh.getCell("F15").font={name:"Calibri",size:11,bold:true};
+  sh.getCell("H15").value={formula:"H14/H13"}; sh.getCell("H15").numFmt="0.0%"; sh.getCell("H15").font={name:"Calibri",size:11,bold:true};
+
+  sh.getCell("B19").value="TOTAL CONSUMO"; sh.getCell("B19").font={name:"Calibri",size:11,bold:true};
+  sh.getCell("C19").value={formula:"SUM(C12:C18)"}; sh.getCell("C19").font={name:"Calibri",size:11,bold:true};
+
+  sh.mergeCells("B20:D22"); sh.getCell("B20").value="OBSERVACIONES: "; sh.getCell("B20").font={name:"Arial",size:10}; sh.getCell("B20").alignment={vertical:"top"};
+
+  sh.getCell("B26").value="FIRMA SUPERVISOR:"; sh.getCell("B26").font={name:"Calibri",size:11,bold:true};
+  sh.getCell("C26").value={formula:"C7"}; sh.getCell("C26").font={name:"Calibri",size:11};
+  sh.getCell("E26").value="FIRMA JEFE OPERATIVO:"; sh.getCell("E26").font={name:"Calibri",size:11,bold:true};
+  sh.getCell("H26").value=JEFE_OPERATIVO; sh.getCell("H26").font={name:"Calibri",size:11};
+
+  bordeRango(sh,11,2,18,4);
+  bordeRango(sh,11,6,15,8);
+  bordeRango(sh,19,2,19,3);
+  bordeRango(sh,20,2,22,4);
+  bordeRango(sh,26,2,26,3);
+  bordeRango(sh,26,5,26,8);
+}
+
+async function construirHojaEvidencia(wb, r, imagenesInline, imagenesLinks){
+  const sh = wb.addWorksheet(`EVIDENCIA ${r.punto}`);
+  sh.getColumn(1).width = 45;
+  sh.getCell("A1").value = "Evidencia fotográfica adjunta";
+  sh.getCell("A1").font = { bold:true, size:12 };
+  let row = 3;
+  for (const img of imagenesInline){
+    const match = String(img.dataUrl).match(/^data:image\/(\w+);base64,(.*)$/);
+    if (!match) continue;
+    let ext = match[1].toLowerCase(); if (ext === "jpg") ext = "jpeg";
+    const imgId = wb.addImage({ base64: img.dataUrl, extension: ext });
+    sh.addImage(imgId, { tl:{ col:0, row: row-1 }, ext:{ width:320, height:240 } });
+    sh.getRow(row).height = 180;
+    row += 13;
+  }
+  if (imagenesLinks && imagenesLinks.length){
+    sh.getCell(`A${row}`).value = "Fotos guardadas previamente (ver en Drive):";
+    sh.getCell(`A${row}`).font = { italic:true, size:10 };
+    row += 1;
+    imagenesLinks.forEach((link, i)=>{
+      const cell = sh.getCell(`A${row}`);
+      cell.value = { text: `Ver foto ${i+1}`, hyperlink: link };
+      cell.font = { color:{argb:"FF0563C1"}, underline:true };
+      row += 1;
+    });
+  }
+}
+
+function fmtDMY(iso){ const d=new Date(iso+"T00:00:00"); return d.toLocaleDateString("es-EC",{day:"2-digit",month:"2-digit",year:"numeric"}); }
+function fmtDDMM(iso){ const d=new Date(iso+"T00:00:00"); return `${String(d.getDate()).padStart(2,"0")}-${String(d.getMonth()+1).padStart(2,"0")}`; }
+
+async function generarYDescargarExcel(r, imagenesInline, imagenesLinks){
+  const wb = new ExcelJS.Workbook();
+  r.tieneEvidencia = (imagenesInline && imagenesInline.length) || (imagenesLinks && imagenesLinks.length);
+  construirHojaCCHH(wb, r);
+  construirHojaConsumo(wb, r);
+  if (r.tieneEvidencia) await construirHojaEvidencia(wb, r, imagenesInline || [], imagenesLinks || []);
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `CCHH_CONSUMO_${r.punto}_${r.fechaReposicion}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 5000);
+}
+
+async function generarExcelDesdeEstado(){
   if (!state.saved){
     toast("Guarda el registro primero.");
     return;
   }
-  pedirYAbrirExcel(state.puntoCod, state.fechaReposicion, document.getElementById("btnExcel"));
+  const d = derived();
+  const p = punto();
+  const record = {
+    punto: state.puntoCod, contrato: p.contrato, responsable: p.responsable, cedula: p.cedula, valorFondo: p.valorFondo,
+    fechaReposicion: state.fechaReposicion, fechaInicio: toISODate(d.fechaInicio), fechaFin: toISODate(d.fechaFin),
+    dias: state.dias.map(v=>Number(v)||0), totalGas: d.totalGas, servicios: d.serviciosNum,
+    costo: d.costo, ratio: d.ratioPct, valor: d.valor,
+  };
+  const btn = document.getElementById("btnExcel");
+  const prevText = btn.textContent;
+  btn.disabled = true; btn.textContent = "Generando Excel...";
+  try {
+    // Las fotos recién subidas en esta sesión ya están en memoria (state.imagenes)
+    // y se incrustan directamente en el Excel, sin necesidad de volver a descargarlas.
+    await generarYDescargarExcel(record, state.imagenes, []);
+  } catch(e){
+    toast("No se pudo generar el Excel: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = prevText;
+    renderResults();
+  }
 }
 
-function descargarExcelDesdeRegistro(r){
-  pedirYAbrirExcel(r.Punto, r.FechaReposicion, null);
+async function descargarExcelDesdeRegistro(r){
+  const record = {
+    punto: r.Punto, contrato: r.Contrato, responsable: r.Responsable, cedula: r.Cedula, valorFondo: (PUNTOS.find(p=>p.codigo===r.Punto)||{}).valorFondo || 0,
+    fechaReposicion: r.FechaReposicion, fechaInicio: r.FechaInicio, fechaFin: r.FechaFin,
+    dias: [r.Dia1,r.Dia2,r.Dia3,r.Dia4,r.Dia5,r.Dia6,r.Dia7].map(v=>Number(v)||0),
+    totalGas: Number(r.TotalGas), servicios: Number(r.Servicios), costo: Number(r.Costo),
+    ratio: Number(r.Ratio), valor: Number(r.Valor),
+  };
+  // Registros antiguos: las fotos ya no están en memoria del navegador, solo se
+  // enlazan (no se pueden incrustar sin volver a descargarlas desde Drive).
+  const imagenesLinks = (r.Imagenes || []).map(id => idADriveView(id));
+  try {
+    await generarYDescargarExcel(record, [], imagenesLinks);
+  } catch(e){
+    toast("No se pudo generar el Excel: " + e.message);
+  }
 }
 
 
