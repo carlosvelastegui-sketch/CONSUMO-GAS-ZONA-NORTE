@@ -96,6 +96,12 @@
   .chartbox{background:var(--soft);border-radius:10px;padding:12px;height:240px;}
   @media (max-width:700px){.chartsrow{grid-template-columns:1fr;}}
 
+  .userbadge{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);}
+  .userbadge b{color:var(--navy);}
+  .userbadge .rolpill{background:var(--soft);border-radius:20px;padding:2px 9px;font-size:10.5px;font-weight:700;color:var(--navy);}
+  .userbadge button{background:none;border:none;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0;}
+  .puntocheck{display:flex;align-items:center;gap:5px;font-size:12px;background:var(--soft);border-radius:8px;padding:5px 10px;}
+
   @media print{
     body{background:#fff;}
     .no-print, .tabs, .header, .toast{display:none !important;}
@@ -112,25 +118,39 @@
   body.printing-recibo .tabs{display:none !important;}
   body.printing-recibo #pdfReciboArea{display:block !important;}
 
-  .recibo-page{padding:10px 4px;}
+  .recibo-page{padding:10px 6px;}
   .recibo-page-break{page-break-before:always;break-before:page;}
-  .recibo-banner-title{text-align:center;font-weight:800;font-size:22px;color:#1B2431;}
-  .recibo-banner-black{background:#000;color:#fff;text-align:center;font-style:italic;font-size:19px;padding:7px;margin:6px 0;}
-  .recibo-banner-sub{text-align:center;font-size:14px;margin-bottom:16px;}
-  .recibo-info{width:100%;border-collapse:collapse;margin-bottom:10px;}
-  .recibo-info td{padding:5px 10px;font-size:12.5px;}
-  .recibo-info td.lbl{font-weight:700;white-space:nowrap;}
-  .recibo-info td.valorfondo{background:#E2EFDA;color:#0070C0;font-weight:700;}
-  .recibo-tabla{width:100%;border-collapse:collapse;margin:12px 0;}
-  .recibo-tabla th, .recibo-tabla td{border:1px solid #000;padding:6px 9px;font-size:11.5px;}
-  .recibo-tabla th{background:#fff;font-weight:700;}
-  .recibo-tabla td.gris{background:#BFBFBF;font-weight:700;font-style:italic;text-align:center;}
-  .recibo-totales{width:60%;margin-left:auto;border-collapse:collapse;margin-top:12px;}
-  .recibo-totales td{border:1px solid #000;padding:7px 10px;font-size:12.5px;}
-  .recibo-totales td.num{text-align:right;font-weight:700;}
-  .recibo-firma{width:100%;border-collapse:collapse;margin-top:20px;}
-  .recibo-firma td{border:1px solid #000;padding:16px 10px;font-style:italic;font-size:12.5px;vertical-align:top;}
-  .recibo-firma .firma-nombre{color:#0070C0;}
+
+  .rc-table{width:100%;border-collapse:collapse;table-layout:fixed;font-family:Arial,sans-serif;}
+  .rc-table td{padding:4px 6px;font-size:11px;vertical-align:middle;overflow-wrap:break-word;}
+  .rc-bordered{border:1px solid #000;}
+  .rc-nb{border:none;} /* hueco sin borde, ej. columnas G,H,I de la fila de firma */
+  .rc-spacer td{height:14px;border:none;}
+  .rc-spacer-sm td{height:4px;border:none;}
+
+  .rc-title{text-align:center;font-weight:800;font-size:19px;padding:6px 0 2px;}
+  .rc-black{background:#000;color:#fff;text-align:center;font-style:italic;font-size:16px;padding:6px 0;}
+  .rc-sub{text-align:center;font-size:13px;padding:4px 0;}
+
+  .rc-lbl{font-weight:700;white-space:nowrap;font-size:10.5px;}
+  .rc-lbl-plain{font-size:10.5px;white-space:nowrap;}
+  .rc-val{font-style:italic;font-size:11px;}
+  .rc-i{font-style:italic;}
+  .rc-center{text-align:center;}
+  .rc-small{font-size:9.5px;}
+  .rc-blue{color:#0070C0;}
+  .rc-fondobg{background:#E2EFDA;}
+  .rc-bold{font-weight:700;}
+
+  .rc-thead td{font-size:9px;font-weight:400;text-align:center;}
+  .rc-gris{background:#BFBFBF;font-weight:700;font-style:italic;text-align:center;font-size:11px;}
+  .rc-data td{font-size:9.5px;}
+
+  .rc-totlbl{font-size:11px;}
+  .rc-num{font-size:11px;text-align:right;}
+
+  .rc-firmarow td{padding:16px 6px;font-size:11px;}
+
   .recibo-evidencia-title{font-weight:800;font-size:16px;margin:10px 0 14px;}
   .recibo-fotos{display:flex;flex-wrap:wrap;gap:16px;}
   .recibo-fotos img{width:250px;height:185px;object-fit:cover;border:1px solid #999;border-radius:4px;}
@@ -140,15 +160,51 @@
 <div class="wrap">
   <div class="header">
     <div class="logo">🔥</div>
-    <div>
+    <div style="flex:1;">
       <div class="title">Control Semanal de Consumo de Gas</div>
       <div class="subtitle">Grupo Hanaska — Reposición de fondo de caja chica por punto</div>
     </div>
+    <div id="userBadge" class="userbadge no-print" style="display:none;"></div>
   </div>
 
-  <div class="tabs no-print">
+  <!-- ============================= LOGIN ============================= -->
+  <div id="screenLogin" style="display:none;">
+    <div class="card" style="max-width:420px;margin:60px auto;">
+      <div class="section-label">Ingresar</div>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px;">Ingresa tu código de acceso para continuar.</p>
+      <label class="field" style="margin-bottom:14px;">Código de acceso
+        <input type="text" id="loginCodigo" placeholder="Ej. R1-2026" style="text-transform:uppercase;" />
+      </label>
+      <div id="loginError" class="errmsg"></div>
+      <button class="primary" id="btnLogin" style="width:100%;justify-content:center;">Ingresar</button>
+    </div>
+  </div>
+
+  <!-- ============================= PERFIL ============================= -->
+  <div id="screenPerfil" style="display:none;">
+    <div class="card" style="max-width:480px;margin:40px auto;">
+      <div class="section-label">Confirma tus datos</div>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px;">Revisa y corrige si algo está mal. Puedes volver a editarlo cuando quieras desde "Mi perfil".</p>
+      <div class="row2">
+        <label class="field">Nombre<input type="text" id="perfilNombre" /></label>
+        <label class="field">Apellido<input type="text" id="perfilApellido" /></label>
+      </div>
+      <label class="field" style="margin-top:12px;">Cédula<input type="text" id="perfilCedula" /></label>
+      <label class="field" style="margin-top:12px;" id="wrapPerfilPunto">Punto / Contrato
+        <select id="perfilPunto"></select>
+      </label>
+      <label class="field" style="margin-top:12px;" id="wrapPerfilFondo">Valor de fondo asignado
+        <input type="number" id="perfilFondo" />
+      </label>
+      <div id="perfilError" class="errmsg"></div>
+      <button class="primary" id="btnConfirmarPerfil" style="width:100%;justify-content:center;margin-top:16px;">Confirmar y continuar</button>
+    </div>
+  </div>
+
+  <div class="tabs no-print" id="tabsNav" style="display:none;">
     <button class="tabbtn active" id="tabBtnRegistro">Registro semanal</button>
     <button class="tabbtn" id="tabBtnInformes">Historial e Informes</button>
+    <button class="tabbtn" id="tabBtnUsuarios" style="display:none;">Usuarios y claves</button>
   </div>
 
   <div id="cfgwarn" class="cfgwarn" style="display:none;">
@@ -244,6 +300,15 @@
       <label class="field" id="wrapFiltroAnio" style="max-width:200px;margin-bottom:14px;display:none;">Año
         <select id="filtroAnio"></select>
       </label>
+
+      <div class="field" id="wrapFiltroPuntos" style="margin-bottom:14px;">
+        <div class="section-label" style="margin-bottom:8px;">Puntos</div>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;margin-bottom:8px;">
+          <input type="checkbox" id="filtroPuntoTodos" checked /> Todos los puntos
+        </label>
+        <div id="filtroPuntoLista" style="display:none;flex-wrap:wrap;gap:10px;"></div>
+      </div>
+
       <div class="btnrow">
         <button class="primary" id="btnGenerarInforme">📊 Generar informe</button>
         <button class="secondary" id="btnImprimirInforme" disabled>🖨️ Imprimir / Guardar PDF</button>
@@ -273,6 +338,49 @@
         <table class="reptable" id="tablaDetalle"></table>
 
         <div class="reporte-total" id="reporteTotalGeneral"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= USUARIOS (solo admin) ============================= -->
+  <div id="screenUsuarios" style="display:none;">
+    <div class="card no-print">
+      <div class="hist-head">🔑 Claves de acceso registradas</div>
+      <div class="hist-list" id="usuariosList" style="max-height:420px;"></div>
+      <button class="secondary" id="btnNuevoUsuario" style="margin-top:14px;">➕ Nuevo usuario / clave</button>
+    </div>
+
+    <div class="card no-print" id="usuarioFormWrap" style="display:none;margin-top:16px;">
+      <div class="section-label" id="usuarioFormTitle">Nuevo usuario</div>
+      <div class="row2">
+        <label class="field">Código de acceso
+          <input type="text" id="uCodigo" style="text-transform:uppercase;" />
+        </label>
+        <label class="field">Rol
+          <select id="uRol">
+            <option value="supervisor">Supervisor</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </label>
+      </div>
+      <div class="row2" style="margin-top:12px;">
+        <label class="field">Nombre<input type="text" id="uNombre" /></label>
+        <label class="field">Apellido<input type="text" id="uApellido" /></label>
+      </div>
+      <div class="row2" style="margin-top:12px;">
+        <label class="field">Cédula<input type="text" id="uCedula" /></label>
+        <label class="field" id="wrapUPunto">Punto
+          <select id="uPunto"></select>
+        </label>
+      </div>
+      <label class="field" style="margin-top:12px;max-width:220px;" id="wrapUFondo">Valor de fondo
+        <input type="number" id="uFondo" />
+      </label>
+      <div id="usuarioError" class="errmsg" style="margin-top:10px;"></div>
+      <div class="btnrow" style="margin-top:14px;">
+        <button class="primary" id="btnGuardarUsuario">💾 Guardar</button>
+        <button class="secondary" id="btnEliminarUsuario" style="display:none;">🗑️ Eliminar</button>
+        <button class="secondary" id="btnCancelarUsuario">Cancelar</button>
       </div>
     </div>
   </div>
@@ -314,6 +422,27 @@ const PUNTOS = [
 ];
 const DIAS_LABELS = ["Día 1","Día 2","Día 3","Día 4","Día 5","Día 6","Día 7"];
 
+// Copia "viva" de PUNTOS: cuando un supervisor confirma/edita su perfil (nombre,
+// cédula, fondo), esos datos reemplazan aquí a los valores estáticos de arriba,
+// tanto para su propia sesión como para cuando el administrador seleccione ese punto.
+let puntosEfectivos = PUNTOS.map(p => ({ ...p }));
+
+function aplicarPerfilesConocidos(usuarios){
+  (usuarios || []).forEach(u => {
+    if (!u.Punto) return;
+    const idx = puntosEfectivos.findIndex(p => p.codigo === u.Punto);
+    if (idx >= 0 && (u.Nombre || u.Apellido)) {
+      puntosEfectivos[idx] = {
+        ...puntosEfectivos[idx],
+        responsable: `${u.Nombre||""} ${u.Apellido||""}`.trim() || puntosEfectivos[idx].responsable,
+        cedula: u.Cedula || puntosEfectivos[idx].cedula,
+        valorFondo: Number(u.Fondo) || puntosEfectivos[idx].valorFondo,
+      };
+    }
+  });
+}
+
+
 // =============================================================================
 // Estado
 // =============================================================================
@@ -335,7 +464,7 @@ function toISODate(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStar
 function addDaysISO(iso, n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return d; }
 function fmtDate(d){ return d.toLocaleDateString("es-EC",{day:"2-digit",month:"2-digit",year:"numeric"}); }
 function money(n){ return `$${(Number(n)||0).toFixed(2)}`; }
-function punto(){ return PUNTOS.find(p=>p.codigo===state.puntoCod); }
+function punto(){ return puntosEfectivos.find(p=>p.codigo===state.puntoCod); }
 function idADriveThumb(id){ return `https://drive.google.com/thumbnail?id=${id}&sz=w300`; }
 function idADriveView(id){ return `https://drive.google.com/file/d/${id}/view`; }
 
@@ -372,7 +501,7 @@ function derived(){
 // =============================================================================
 function renderSelect(){
   const sel = document.getElementById("puntoCod");
-  sel.innerHTML = PUNTOS.map(p=>`<option value="${p.codigo}" ${p.codigo===state.puntoCod?"selected":""}>${p.codigo} — ${p.contrato}</option>`).join("");
+  sel.innerHTML = puntosEfectivos.filter(puntoVisiblePara).map(p=>`<option value="${p.codigo}" ${p.codigo===state.puntoCod?"selected":""}>${p.codigo} — ${p.contrato}</option>`).join("");
 }
 
 function renderChips(){
@@ -462,7 +591,7 @@ function renderHistory(){
   status.textContent = "";
   list.innerHTML = state.history.map(r=>{
     const bloq = Number(r.Ratio) >= RATIO_LIMITE;  // Ratio se guarda ya en porcentaje (ej. 5.89 = 5.89%)
-    const p = PUNTOS.find(x=>x.codigo===r.Punto) || {};
+    const p = puntosEfectivos.find(x=>x.codigo===r.Punto) || {};
     const imgIds = r.Imagenes || [];
     const thumbsHtml = imgIds.length ? `
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
@@ -908,7 +1037,7 @@ async function generarExcelDesdeEstado(){
 
 async function descargarExcelDesdeRegistro(r, btn){
   const record = {
-    punto: r.Punto, contrato: r.Contrato, responsable: r.Responsable, cedula: r.Cedula, valorFondo: (PUNTOS.find(p=>p.codigo===r.Punto)||{}).valorFondo || 0,
+    punto: r.Punto, contrato: r.Contrato, responsable: r.Responsable, cedula: r.Cedula, valorFondo: (puntosEfectivos.find(p=>p.codigo===r.Punto)||{}).valorFondo || 0,
     fechaReposicion: r.FechaReposicion, fechaInicio: r.FechaInicio, fechaFin: r.FechaFin,
     dias: [r.Dia1,r.Dia2,r.Dia3,r.Dia4,r.Dia5,r.Dia6,r.Dia7].map(v=>Number(v)||0),
     totalGas: Number(r.TotalGas), servicios: Number(r.Servicios), costo: Number(r.Costo),
@@ -942,50 +1071,75 @@ function construirHtmlRecibo(r, imagenesInline){
   const fechaRepo = new Date(r.fechaReposicion+"T00:00:00");
   const detalle = `Pago por compra ${r.totalGas} tanques de gas del ${fmtDMY(r.fechaInicio)} al ${fmtDMY(r.fechaFin)}`;
   const disponible = (Number(r.valorFondo)||0) - (Number(r.valor)||0);
-
   const fotosHtml = (imagenesInline||[]).map(img=>`<img src="${img.dataUrl}" alt="evidencia"/>`).join("");
+
+  // Anchos de columna calcados de la hoja Excel (B..M), en % relativo.
+  const cols = [7.28,8.47,10.52,9.96,12.39,4.55,13.32,6.41,4.79,6.60,7.22,8.47];
+  const colgroup = `<colgroup>${cols.map(w=>`<col style="width:${w}%;">`).join("")}</colgroup>`;
 
   return `
     <div class="recibo-page">
-      <div class="recibo-banner-title">GRUPO&nbsp;&nbsp;HANASKA</div>
-      <div class="recibo-banner-black">TECFOOD SERVICIOS DE ALIMENTACIÓN S.A.</div>
-      <div class="recibo-banner-sub">REPOSICIÓN FONDO DE CAJA CHICA - ANEXO 2</div>
+      <table class="rc-table">
+        ${colgroup}
+        <tr><td colspan="12" class="rc-title">GRUPO&nbsp;&nbsp;HANASKA</td></tr>
+        <tr><td colspan="12" class="rc-black">TECFOOD SERVICIOS DE ALIMENTACIÓN S.A.</td></tr>
+        <tr><td colspan="12" class="rc-sub">REPOSICIÓN FONDO DE CAJA CHICA - ANEXO 2</td></tr>
+        <tr class="rc-spacer"><td colspan="12"></td></tr>
 
-      <table class="recibo-info">
         <tr>
-          <td class="lbl">RESPONSABLE:</td><td class="val">${r.responsable}</td>
-          <td class="lbl">Cédula Ciudadanía:</td><td class="val">${r.cedula}</td>
-          <td class="lbl">CONTRATO:</td><td class="val">${r.contrato}</td>
+          <td colspan="2" class="rc-lbl">RESPONSABLE:</td>
+          <td colspan="4" class="rc-val">${r.responsable}</td>
+          <td class="rc-lbl rc-i">Cédula Ciudadanía:</td>
+          <td colspan="3" class="rc-val">${r.cedula}</td>
+          <td class="rc-lbl-plain">CONTRATO:</td>
+          <td class="rc-val rc-center rc-small">${r.contrato}</td>
         </tr>
         <tr>
-          <td class="lbl">FECHA REPOSICION:</td><td class="val">${fmtDate(fechaRepo)}</td>
-          <td class="lbl">CIUDAD:</td><td class="val">${CIUDAD}</td>
-          <td class="lbl">Valor Fondo:</td><td class="val valorfondo">${money(r.valorFondo)}</td>
+          <td colspan="2" class="rc-lbl">FECHA&nbsp;&nbsp;REPOSICION:</td>
+          <td colspan="4" class="rc-val">${fmtDate(fechaRepo)}</td>
+          <td class="rc-lbl-plain">CIUDAD :</td>
+          <td colspan="3" class="rc-val">${CIUDAD}</td>
+          <td class="rc-lbl-plain rc-fondobg">Valor Fondo:</td>
+          <td class="rc-val rc-center rc-fondobg rc-blue">${money(r.valorFondo)}</td>
         </tr>
-      </table>
+        <tr class="rc-spacer"><td colspan="12"></td></tr>
 
-      <table class="recibo-tabla">
-        <thead><tr><th>FECHA</th><th>RUC</th><th>PROVEEDOR</th><th>DETALLE</th><th>CENTRO DE COSTO/CONTRATO</th><th>TIPO DOCUM</th><th>VALOR</th><th>TOTAL ACUMULADO</th></tr></thead>
-        <tbody>
-          <tr><td colspan="8" class="gris">DOCUMENTOS&nbsp;&nbsp;NO&nbsp;&nbsp;VÁLIDOS&nbsp;&nbsp;PARA&nbsp;&nbsp;LA&nbsp;&nbsp;ADMINISTRACION&nbsp;&nbsp;TRIBUTARIA</td></tr>
-          <tr>
-            <td>${fmtDate(fechaRepo)}</td><td>${PROVEEDOR.ruc}</td><td>${PROVEEDOR.nombre}</td><td>${detalle}</td>
-            <td>${r.contrato}</td><td>recibo</td><td>${money(r.valor)}</td><td>${money(r.valor)}</td>
-          </tr>
-        </tbody>
-      </table>
+        <tr class="rc-thead">
+          <td class="rc-bordered">FECHA</td>
+          <td class="rc-bordered">RUC</td>
+          <td class="rc-bordered">PROVEEDOR</td>
+          <td colspan="4" class="rc-bordered">DETALLE</td>
+          <td colspan="2" class="rc-bordered">CENTRO DE COSTO/CONTRATO</td>
+          <td class="rc-bordered">TIPO DOCUM</td>
+          <td class="rc-bordered">VALOR&nbsp;&nbsp;</td>
+          <td class="rc-bordered">TOTAL ACUMULADO</td>
+        </tr>
+        <tr><td colspan="12" class="rc-gris rc-bordered">DOCUMENTOS&nbsp;&nbsp;NO&nbsp;&nbsp;VÁLIDOS&nbsp;&nbsp;PARA&nbsp;&nbsp;LA&nbsp;&nbsp;ADMINISTRACION&nbsp;&nbsp;TRIBUTARIA</td></tr>
+        <tr class="rc-data">
+          <td class="rc-bordered rc-center">${fmtDate(fechaRepo)}</td>
+          <td class="rc-bordered rc-center">${PROVEEDOR.ruc}</td>
+          <td class="rc-bordered rc-center">${PROVEEDOR.nombre}</td>
+          <td colspan="4" class="rc-bordered">${detalle}</td>
+          <td colspan="2" class="rc-bordered rc-center">${r.contrato}</td>
+          <td class="rc-bordered rc-center">recibo</td>
+          <td class="rc-bordered">${money(r.valor)}</td>
+          <td class="rc-bordered">${money(r.valor)}</td>
+        </tr>
+        <tr class="rc-spacer"><td colspan="12"></td></tr>
 
-      <table class="recibo-totales">
-        <tr><td>TOTAL</td><td class="num">${money(r.valor)}</td></tr>
-        <tr><td>TOTAL VALOR A REEMBOLSAR</td><td class="num">${money(r.valor)}</td></tr>
-        <tr><td>FONDO CAJA CHICA DISPONIBLE</td><td class="num">${money(disponible)}</td></tr>
-      </table>
+        <tr><td colspan="11" class="rc-bordered rc-totlbl">TOTAL</td><td class="rc-bordered rc-num">${money(r.valor)}</td></tr>
+        <tr class="rc-spacer-sm"><td colspan="12"></td></tr>
+        <tr><td colspan="11" class="rc-bordered rc-totlbl rc-bold">TOTAL VALOR A REEMBOLSAR</td><td class="rc-bordered rc-num rc-bold">${money(r.valor)}</td></tr>
+        <tr class="rc-spacer-sm"><td colspan="12"></td></tr>
+        <tr><td colspan="11" class="rc-bordered rc-totlbl rc-bold">FONDO CAJA CHICA DISPONIBLE</td><td class="rc-bordered rc-num rc-bold">${money(disponible)}</td></tr>
+        <tr class="rc-spacer-sm"><td colspan="12"></td></tr>
 
-      <table class="recibo-firma">
-        <tr>
-          <td style="width:35%;">Responsable: <span class="firma-nombre">${r.responsable}</span> &nbsp;&nbsp;(f)</td>
-          <td style="width:30%;"></td>
-          <td style="width:35%;">Autorizado:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(f)<br><br>Nombre:</td>
+        <tr class="rc-firmarow">
+          <td class="rc-bordered rc-i">Responsable:</td>
+          <td colspan="2" class="rc-bordered rc-i rc-blue">${r.responsable}</td>
+          <td colspan="2" class="rc-bordered rc-i">(f)</td>
+          <td class="rc-nb"></td><td class="rc-nb"></td><td class="rc-nb"></td>
+          <td colspan="4" class="rc-bordered rc-i">Autorizado:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(f)<br><br>Nombre:</td>
         </tr>
       </table>
     </div>
@@ -1026,7 +1180,7 @@ async function imprimirPdfDesdeEstado(){
 
 async function imprimirPdfDesdeRegistro(r, btn){
   const record = {
-    punto: r.Punto, contrato: r.Contrato, responsable: r.Responsable, cedula: r.Cedula, valorFondo: (PUNTOS.find(p=>p.codigo===r.Punto)||{}).valorFondo || 0,
+    punto: r.Punto, contrato: r.Contrato, responsable: r.Responsable, cedula: r.Cedula, valorFondo: (puntosEfectivos.find(p=>p.codigo===r.Punto)||{}).valorFondo || 0,
     fechaReposicion: r.FechaReposicion, fechaInicio: r.FechaInicio, fechaFin: r.FechaFin,
     totalGas: Number(r.TotalGas), valor: Number(r.Valor),
   };
@@ -1060,9 +1214,12 @@ let chartTanquesInstance = null;
 function cambiarPantalla(nombre){
   document.getElementById("screenRegistro").style.display = nombre==="registro" ? "" : "none";
   document.getElementById("screenInformes").style.display = nombre==="informes" ? "" : "none";
+  document.getElementById("screenUsuarios").style.display = nombre==="usuarios" ? "" : "none";
   document.getElementById("tabBtnRegistro").classList.toggle("active", nombre==="registro");
   document.getElementById("tabBtnInformes").classList.toggle("active", nombre==="informes");
+  document.getElementById("tabBtnUsuarios").classList.toggle("active", nombre==="usuarios");
   if (nombre==="informes" && historico===null) cargarHistoricoCompleto();
+  if (nombre==="usuarios") cargarYRenderUsuarios();
 }
 
 async function cargarHistoricoCompleto(){
@@ -1086,6 +1243,21 @@ function poblarFiltros(){
   document.getElementById("filtroAnio").innerHTML = anioOptions;
 
   document.getElementById("filtroMes").innerHTML = MESES.map((m,i)=>`<option value="${i+1}">${m}</option>`).join("");
+
+  // Filtro de puntos: un supervisor no ve este control, su informe siempre es de su propio punto.
+  const wrapPuntos = document.getElementById("wrapFiltroPuntos");
+  if (!esAdmin()){
+    wrapPuntos.style.display = "none";
+  } else {
+    wrapPuntos.style.display = "";
+    const puntosEnDatos = [...new Set(historico.map(r=>r.Punto).filter(Boolean))].sort();
+    document.getElementById("filtroPuntoLista").innerHTML = puntosEnDatos.map(cod=>{
+      const p = puntosEfectivos.find(x=>x.codigo===cod);
+      return `<label class="puntocheck"><input type="checkbox" class="chkPunto" value="${cod}" checked /> ${cod}${p?` — ${p.contrato}`:""}</label>`;
+    }).join("");
+    document.getElementById("filtroPuntoTodos").checked = true;
+    document.getElementById("filtroPuntoLista").style.display = "none";
+  }
 }
 
 function actualizarVisibilidadFiltros(){
@@ -1095,23 +1267,42 @@ function actualizarVisibilidadFiltros(){
   document.getElementById("wrapFiltroAnio").style.display = (tipo==="mes"||tipo==="anio") ? "" : "none";
 }
 
+function puntosSeleccionados(){
+  if (!esAdmin()) return session ? [session.punto] : null;
+  const todos = document.getElementById("filtroPuntoTodos").checked;
+  if (todos) return null; // null = sin restricción, incluye todos
+  return Array.from(document.querySelectorAll(".chkPunto:checked")).map(c=>c.value);
+}
+
 function filtrarHistorico(){
   const tipo = document.getElementById("filtroTipo").value;
+  let base;
   if (tipo === "semana"){
     const f = document.getElementById("filtroSemana").value;
-    return { filas: historico.filter(r=>r.FechaReposicion===f), etiqueta: f ? `Semana con reposición ${fmtDate(new Date(f+"T00:00:00"))}` : "" };
-  }
-  if (tipo === "mes"){
+    base = { filas: historico.filter(r=>r.FechaReposicion===f), etiqueta: f ? `Semana con reposición ${fmtDate(new Date(f+"T00:00:00"))}` : "" };
+  } else if (tipo === "mes"){
     const mes = document.getElementById("filtroMes").value.padStart(2,"0");
     const anio = document.getElementById("filtroAnio").value;
     const filas = historico.filter(r => (r.FechaReposicion||"").slice(0,4)===anio && (r.FechaReposicion||"").slice(5,7)===mes);
-    return { filas, etiqueta: `${MESES[Number(mes)-1]} ${anio}` };
+    base = { filas, etiqueta: `${MESES[Number(mes)-1]} ${anio}` };
+  } else {
+    const anio = document.getElementById("filtroAnio").value;
+    const filas = historico.filter(r => (r.FechaReposicion||"").slice(0,4)===anio);
+    base = { filas, etiqueta: `Año ${anio}` };
   }
-  // anio
-  const anio = document.getElementById("filtroAnio").value;
-  const filas = historico.filter(r => (r.FechaReposicion||"").slice(0,4)===anio);
-  return { filas, etiqueta: `Año ${anio}` };
+
+  const puntos = puntosSeleccionados();
+  if (puntos){
+    base.filas = base.filas.filter(r => puntos.includes(r.Punto));
+    if (esAdmin() && puntos.length){
+      base.etiqueta += ` · Puntos: ${puntos.join(", ")}`;
+    }
+  } else if (!esAdmin() && session){
+    base.etiqueta += ` · Punto: ${session.punto}`;
+  }
+  return base;
 }
+
 
 function generarInforme(){
   if (!historico || !historico.length){
@@ -1183,15 +1374,342 @@ function renderGraficos(filasResumen){
   });
 }
 
+// =============================================================================
+// SESIÓN / LOGIN / PERFIL / ROLES
+// =============================================================================
+// Nota honesta: esto es un control de acceso simple a nivel de interfaz (útil
+// para que cada quien vea solo lo suyo por comodidad). El backend no valida el
+// rol en cada petición, así que no reemplaza una seguridad real fuerte.
+let session = null; // { codigo, rol, nombre, apellido, cedula, punto, fondo }
+let usuariosConocidos = [];
+
+function cargarSesionGuardada(){
+  try {
+    const raw = localStorage.getItem("gasapp_session");
+    if (raw) session = JSON.parse(raw);
+  } catch(e){ session = null; }
+}
+function guardarSesionLocal(){
+  try { localStorage.setItem("gasapp_session", JSON.stringify(session)); } catch(e){}
+}
+function cerrarSesion(){
+  session = null;
+  try { localStorage.removeItem("gasapp_session"); } catch(e){}
+  document.getElementById("userBadge").style.display = "none";
+  document.getElementById("tabsNav").style.display = "none";
+  document.getElementById("screenRegistro").style.display = "none";
+  document.getElementById("screenInformes").style.display = "none";
+  document.getElementById("loginCodigo").value = "";
+  document.getElementById("loginError").textContent = "";
+  document.getElementById("screenLogin").style.display = "";
+  document.getElementById("screenPerfil").style.display = "none";
+}
+
+function esAdmin(){ return session && session.rol === "admin"; }
+function puntoVisiblePara(p){ return esAdmin() || !session || p.codigo === session.punto; }
+
+function fetchLoginJSONP(codigo){
+  return new Promise((resolve)=>{
+    const cbName = "cbl_" + Date.now() + "_" + Math.floor(Math.random()*10000);
+    const script = document.createElement("script");
+    const cleanup = ()=>{ delete window[cbName]; script.remove(); };
+    window[cbName] = function(data){ resolve(data); cleanup(); };
+    script.onerror = ()=>{ resolve({ ok:false, error:"No se pudo contactar al servidor." }); cleanup(); };
+    script.src = `${CONFIG.API_URL}?action=login&codigo=${encodeURIComponent(codigo)}&callback=${cbName}&_=${Date.now()}`;
+    document.body.appendChild(script);
+  });
+}
+
+function fetchUsuariosJSONP(){
+  return new Promise((resolve)=>{
+    const cbName = "cbu_" + Date.now() + "_" + Math.floor(Math.random()*10000);
+    const script = document.createElement("script");
+    const cleanup = ()=>{ delete window[cbName]; script.remove(); };
+    window[cbName] = function(data){ resolve((data && data.usuarios) ? data.usuarios : []); cleanup(); };
+    script.onerror = ()=>{ resolve([]); cleanup(); };
+    script.src = `${CONFIG.API_URL}?action=usuarios&callback=${cbName}&_=${Date.now()}`;
+    document.body.appendChild(script);
+  });
+}
+
+function guardarPerfilBackend(){
+  const form = document.getElementById("postForm");
+  form.innerHTML = "";
+  form.action = CONFIG.API_URL;
+  const fields = {
+    accion: "perfil", codigo: session.codigo, nombre: session.nombre, apellido: session.apellido,
+    cedula: session.cedula, punto: session.punto || "", fondo: session.fondo || 0,
+  };
+  Object.keys(fields).forEach(k=>{
+    const inp = document.createElement("input");
+    inp.type = "hidden"; inp.name = k; inp.value = fields[k];
+    form.appendChild(inp);
+  });
+  const iframe = document.querySelector('iframe[name="hidden_iframe"]');
+  const onLoad = ()=>{ iframe.removeEventListener("load", onLoad); };
+  iframe.addEventListener("load", onLoad);
+  form.submit();
+}
+
+async function intentarLogin(){
+  const codigo = document.getElementById("loginCodigo").value.trim().toUpperCase();
+  document.getElementById("loginError").textContent = "";
+  if (!codigo){ document.getElementById("loginError").textContent = "Ingresa un código."; return; }
+  if (CONFIG.API_URL.indexOf("PEGA_AQUI") === 0){
+    document.getElementById("loginError").textContent = "Falta configurar CONFIG.API_URL.";
+    return;
+  }
+  const btn = document.getElementById("btnLogin");
+  btn.disabled = true; btn.textContent = "Verificando...";
+  const data = await fetchLoginJSONP(codigo);
+  btn.disabled = false; btn.textContent = "Ingresar";
+
+  if (!data || !data.ok){
+    document.getElementById("loginError").textContent = (data && data.error) || "Código no válido.";
+    return;
+  }
+  const u = data.usuario;
+  session = {
+    codigo: u.Codigo, rol: u.Rol,
+    nombre: u.Nombre || "", apellido: u.Apellido || "", cedula: u.Cedula || "",
+    punto: u.Punto || "", fondo: Number(u.Fondo) || 0,
+  };
+  mostrarPantallaPerfil();
+}
+
+function mostrarPantallaPerfil(){
+  document.getElementById("screenLogin").style.display = "none";
+  document.getElementById("screenPerfil").style.display = "";
+  document.getElementById("perfilNombre").value = session.nombre;
+  document.getElementById("perfilApellido").value = session.apellido;
+  document.getElementById("perfilCedula").value = session.cedula;
+  document.getElementById("perfilFondo").value = session.fondo || "";
+
+  const esAdm = session.rol === "admin";
+  document.getElementById("wrapPerfilPunto").style.display = esAdm ? "none" : "";
+  document.getElementById("wrapPerfilFondo").style.display = esAdm ? "none" : "";
+  if (!esAdm){
+    document.getElementById("perfilPunto").innerHTML = PUNTOS.map(p=>
+      `<option value="${p.codigo}" ${p.codigo===session.punto?"selected":""}>${p.codigo} — ${p.contrato}</option>`
+    ).join("");
+  }
+}
+
+async function confirmarPerfil(){
+  const nombre = document.getElementById("perfilNombre").value.trim();
+  const apellido = document.getElementById("perfilApellido").value.trim();
+  const cedula = document.getElementById("perfilCedula").value.trim();
+  document.getElementById("perfilError").textContent = "";
+  if (!nombre || !apellido || !cedula){
+    document.getElementById("perfilError").textContent = "Completa nombre, apellido y cédula.";
+    return;
+  }
+  session.nombre = nombre; session.apellido = apellido; session.cedula = cedula;
+  if (session.rol !== "admin"){
+    session.punto = document.getElementById("perfilPunto").value;
+    session.fondo = Number(document.getElementById("perfilFondo").value) || 0;
+  }
+  guardarPerfilBackend();
+  guardarSesionLocal();
+  await iniciarApp();
+}
+
+function renderUserBadge(){
+  const b = document.getElementById("userBadge");
+  b.style.display = "flex";
+  const rolTxt = session.rol === "admin" ? "Administrador" : `Supervisor · ${session.punto}`;
+  b.innerHTML = `<span><b>${session.nombre} ${session.apellido}</b></span><span class="rolpill">${rolTxt}</span><button id="btnEditarPerfil">Mi perfil</button><button id="btnCerrarSesion">Salir</button>`;
+  document.getElementById("btnEditarPerfil").addEventListener("click", ()=>{
+    document.getElementById("tabsNav").style.display = "none";
+    document.getElementById("screenRegistro").style.display = "none";
+    document.getElementById("screenInformes").style.display = "none";
+    mostrarPantallaPerfil();
+  });
+  document.getElementById("btnCerrarSesion").addEventListener("click", cerrarSesion);
+}
+
+async function iniciarApp(){
+  document.getElementById("screenLogin").style.display = "none";
+  document.getElementById("screenPerfil").style.display = "none";
+  document.getElementById("tabsNav").style.display = "";
+  renderUserBadge();
+
+  // Si es supervisor, su punto queda fijo (no elegible) y el selector se bloquea.
+  if (!esAdmin()){
+    state.puntoCod = session.punto;
+    document.getElementById("puntoCod").disabled = true;
+  } else {
+    document.getElementById("puntoCod").disabled = false;
+  }
+
+  usuariosConocidos = await fetchUsuariosJSONP();
+  aplicarPerfilesConocidos(usuariosConocidos);
+  // Asegura que el propio perfil recién confirmado quede reflejado de inmediato,
+  // aunque el backend todavía no haya terminado de guardar la fila.
+  if (!esAdmin()){
+    const idx = puntosEfectivos.findIndex(p=>p.codigo===session.punto);
+    if (idx>=0) puntosEfectivos[idx] = { ...puntosEfectivos[idx], responsable: `${session.nombre} ${session.apellido}`.trim(), cedula: session.cedula, valorFondo: session.fondo };
+  }
+
+  document.getElementById("tabBtnUsuarios").style.display = esAdmin() ? "" : "none";
+
+  cambiarPantalla("registro");
+  renderAll();
+  if (CONFIG.API_URL.indexOf("PEGA_AQUI") !== 0){
+    cargarHistorial();
+  } else {
+    state.history = [];
+    renderHistory();
+  }
+}
+
+// =============================================================================
+// GESTIÓN DE USUARIOS Y CLAVES (solo administrador)
+// =============================================================================
+let usuarioEditando = null; // código del usuario que se está editando, o null si es nuevo
+
+function enviarPostBackend(fields){
+  const form = document.getElementById("postForm");
+  form.innerHTML = "";
+  form.action = CONFIG.API_URL;
+  Object.keys(fields).forEach(k=>{
+    const inp = document.createElement("input");
+    inp.type = "hidden"; inp.name = k; inp.value = fields[k];
+    form.appendChild(inp);
+  });
+  return new Promise((resolve)=>{
+    const iframe = document.querySelector('iframe[name="hidden_iframe"]');
+    const onLoad = ()=>{ iframe.removeEventListener("load", onLoad); resolve(); };
+    iframe.addEventListener("load", onLoad);
+    form.submit();
+  });
+}
+
+async function cargarYRenderUsuarios(){
+  document.getElementById("usuariosList").innerHTML = `<div style="font-size:12.5px;color:var(--faint);">Cargando…</div>`;
+  usuariosConocidos = await fetchUsuariosJSONP();
+  renderUsuariosList();
+}
+
+function renderUsuariosList(){
+  const cont = document.getElementById("usuariosList");
+  if (!usuariosConocidos.length){
+    cont.innerHTML = `<div style="font-size:12.5px;color:var(--faint);">No hay usuarios registrados.</div>`;
+    return;
+  }
+  const orden = [...usuariosConocidos].sort((a,b)=> (a.Rol===b.Rol ? String(a.Codigo).localeCompare(b.Codigo) : (a.Rol==="admin"?-1:1)));
+  cont.innerHTML = orden.map(u=>{
+    const nombreCompleto = `${u.Nombre||""} ${u.Apellido||""}`.trim() || "<em>(sin confirmar todavía)</em>";
+    const rolTxt = u.Rol==="admin" ? "Administrador" : `Supervisor · ${u.Punto||"—"}`;
+    return `
+      <div class="hist-item">
+        <div class="hist-top">
+          <div class="hist-title">${u.Codigo}</div>
+          <span class="badge ok">${rolTxt}</span>
+        </div>
+        <div class="hist-sub">${nombreCompleto}${u.Cedula ? " · Cédula "+u.Cedula : ""}${u.Rol!=="admin" && u.Fondo ? " · Fondo "+money(u.Fondo) : ""}</div>
+        <div class="hist-bottom">
+          <div></div>
+          <button class="tinybtn" data-editu="${u.Codigo}">✏️ Editar</button>
+        </div>
+      </div>`;
+  }).join("");
+  document.querySelectorAll("[data-editu]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const u = usuariosConocidos.find(x=>x.Codigo===btn.dataset.editu);
+      if (u) abrirFormUsuario(u);
+    });
+  });
+}
+
+function abrirFormUsuario(u){
+  usuarioEditando = u ? u.Codigo : null;
+  document.getElementById("usuarioFormWrap").style.display = "";
+  document.getElementById("usuarioFormTitle").textContent = u ? `Editar: ${u.Codigo}` : "Nuevo usuario";
+  document.getElementById("usuarioError").textContent = "";
+
+  document.getElementById("uCodigo").value = u ? u.Codigo : "";
+  document.getElementById("uCodigo").disabled = !!u; // no se puede renombrar un código existente
+  document.getElementById("uRol").value = u ? u.Rol : "supervisor";
+  document.getElementById("uNombre").value = u ? (u.Nombre||"") : "";
+  document.getElementById("uApellido").value = u ? (u.Apellido||"") : "";
+  document.getElementById("uCedula").value = u ? (u.Cedula||"") : "";
+  document.getElementById("uFondo").value = u ? (u.Fondo||"") : "";
+  document.getElementById("uPunto").innerHTML = PUNTOS.map(p=>`<option value="${p.codigo}">${p.codigo} — ${p.contrato}</option>`).join("");
+  if (u && u.Punto) document.getElementById("uPunto").value = u.Punto;
+  document.getElementById("btnEliminarUsuario").style.display = u ? "" : "none";
+
+  actualizarVisibilidadFormUsuario();
+}
+
+function actualizarVisibilidadFormUsuario(){
+  const esAdm = document.getElementById("uRol").value === "admin";
+  document.getElementById("wrapUPunto").style.display = esAdm ? "none" : "";
+  document.getElementById("wrapUFondo").style.display = esAdm ? "none" : "";
+}
+
+function cerrarFormUsuario(){
+  document.getElementById("usuarioFormWrap").style.display = "none";
+  usuarioEditando = null;
+}
+
+async function guardarUsuarioForm(){
+  const codigo = document.getElementById("uCodigo").value.trim().toUpperCase();
+  const rol = document.getElementById("uRol").value;
+  const nombre = document.getElementById("uNombre").value.trim();
+  const apellido = document.getElementById("uApellido").value.trim();
+  const cedula = document.getElementById("uCedula").value.trim();
+  const punto = document.getElementById("uPunto").value;
+  const fondo = document.getElementById("uFondo").value;
+
+  document.getElementById("usuarioError").textContent = "";
+  if (!codigo){ document.getElementById("usuarioError").textContent = "El código de acceso es obligatorio."; return; }
+  if (!usuarioEditando && usuariosConocidos.some(u=>u.Codigo===codigo)){
+    document.getElementById("usuarioError").textContent = "Ya existe un usuario con ese código.";
+    return;
+  }
+
+  const btn = document.getElementById("btnGuardarUsuario");
+  btn.disabled = true; btn.textContent = "Guardando...";
+  await enviarPostBackend({ accion:"guardarUsuario", codigo, rol, nombre, apellido, cedula, punto, fondo });
+  btn.disabled = false; btn.textContent = "💾 Guardar";
+
+  toast("Usuario guardado.");
+  cerrarFormUsuario();
+  await cargarYRenderUsuarios();
+}
+
+async function eliminarUsuarioForm(){
+  if (!usuarioEditando) return;
+  if (!confirm(`¿Eliminar la clave "${usuarioEditando}"? Esta acción no se puede deshacer.`)) return;
+  await enviarPostBackend({ accion:"eliminarUsuario", codigo: usuarioEditando });
+  toast("Usuario eliminado.");
+  cerrarFormUsuario();
+  await cargarYRenderUsuarios();
+}
+
 
 // =============================================================================
 // Eventos globales
 // =============================================================================
 document.getElementById("tabBtnRegistro").addEventListener("click", ()=>cambiarPantalla("registro"));
 document.getElementById("tabBtnInformes").addEventListener("click", ()=>cambiarPantalla("informes"));
+document.getElementById("tabBtnUsuarios").addEventListener("click", ()=>cambiarPantalla("usuarios"));
+document.getElementById("btnNuevoUsuario").addEventListener("click", ()=>abrirFormUsuario(null));
+document.getElementById("uRol").addEventListener("change", actualizarVisibilidadFormUsuario);
+document.getElementById("btnGuardarUsuario").addEventListener("click", guardarUsuarioForm);
+document.getElementById("btnEliminarUsuario").addEventListener("click", eliminarUsuarioForm);
+document.getElementById("btnCancelarUsuario").addEventListener("click", cerrarFormUsuario);
 document.getElementById("filtroTipo").addEventListener("change", actualizarVisibilidadFiltros);
 document.getElementById("btnGenerarInforme").addEventListener("click", generarInforme);
 document.getElementById("btnImprimirInforme").addEventListener("click", ()=> window.print());
+document.getElementById("filtroPuntoTodos").addEventListener("change", (e)=>{
+  document.getElementById("filtroPuntoLista").style.display = e.target.checked ? "none" : "flex";
+});
+
+document.getElementById("btnLogin").addEventListener("click", intentarLogin);
+document.getElementById("loginCodigo").addEventListener("keydown", e=>{ if (e.key==="Enter") intentarLogin(); });
+document.getElementById("btnConfirmarPerfil").addEventListener("click", confirmarPerfil);
 
 document.getElementById("puntoCod").addEventListener("change", e=>{
   state.puntoCod = e.target.value; state.saved = false; renderChips(); renderResults();
@@ -1231,12 +1749,11 @@ document.getElementById("btnPdf").addEventListener("click", imprimirPdfDesdeEsta
 // =============================================================================
 // Init
 // =============================================================================
-renderAll();
-if (CONFIG.API_URL.indexOf("PEGA_AQUI") !== 0){
-  cargarHistorial();
+cargarSesionGuardada();
+if (session && session.codigo){
+  iniciarApp();
 } else {
-  state.history = [];
-  renderHistory();
+  document.getElementById("screenLogin").style.display = "";
 }
 </script>
 </body>
