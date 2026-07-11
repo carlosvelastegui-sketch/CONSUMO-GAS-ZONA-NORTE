@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Control Semanal de Consumo de Gas — Hanaska</title>
-<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
   :root{
     --navy:#002060; --navy-ink:#1B2431; --muted:#5B6478; --faint:#8A93A6;
@@ -695,11 +695,15 @@ function fmtDMY(iso){ const d=new Date(iso+"T00:00:00"); return d.toLocaleDateSt
 function fmtDDMM(iso){ const d=new Date(iso+"T00:00:00"); return `${String(d.getDate()).padStart(2,"0")}-${String(d.getMonth()+1).padStart(2,"0")}`; }
 
 async function generarYDescargarExcel(r, imagenesInline, imagenesLinks){
+  if (typeof ExcelJS === "undefined") {
+    throw new Error("La librería ExcelJS no cargó (revisa tu conexión o si algo bloquea cdnjs.cloudflare.com). Recarga la página con Ctrl+Shift+R e intenta de nuevo.");
+  }
   const wb = new ExcelJS.Workbook();
   r.tieneEvidencia = (imagenesInline && imagenesInline.length) || (imagenesLinks && imagenesLinks.length);
   construirHojaCCHH(wb, r);
   construirHojaConsumo(wb, r);
   if (r.tieneEvidencia) await construirHojaEvidencia(wb, r, imagenesInline || [], imagenesLinks || []);
+  console.log("Excel construido OK. Filas CCHH:", wb.getWorksheet(`CCHH ${r.punto}`).rowCount, "| Filas CONSUMO:", wb.getWorksheet(`CONSUMO ${r.punto}`).rowCount);
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -734,7 +738,8 @@ async function generarExcelDesdeEstado(){
     // y se incrustan directamente en el Excel, sin necesidad de volver a descargarlas.
     await generarYDescargarExcel(record, state.imagenes, []);
   } catch(e){
-    toast("No se pudo generar el Excel: " + e.message);
+    console.error("Error generando Excel:", e);
+    alert("No se pudo generar el Excel:\n\n" + e.message + "\n\n(revisa la consola con F12 para más detalle, y mándale esto a soporte)");
   } finally {
     btn.disabled = false; btn.textContent = prevText;
     renderResults();
@@ -755,7 +760,8 @@ async function descargarExcelDesdeRegistro(r){
   try {
     await generarYDescargarExcel(record, [], imagenesLinks);
   } catch(e){
-    toast("No se pudo generar el Excel: " + e.message);
+    console.error("Error generando Excel:", e);
+    alert("No se pudo generar el Excel:\n\n" + e.message + "\n\n(revisa la consola con F12 para más detalle, y mándale esto a soporte)");
   }
 }
 
