@@ -178,6 +178,18 @@
       </label>
       <div id="loginError" class="errmsg"></div>
       <button class="primary" id="btnLogin" style="width:100%;justify-content:center;">Ingresar</button>
+      <button id="btnMostrarRecuperar" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline;cursor:pointer;margin-top:12px;">¿Olvidaste tu clave?</button>
+
+      <div id="recuperarWrap" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
+        <div class="section-label" style="margin-bottom:6px;">Recuperar clave</div>
+        <p style="font-size:11.5px;color:var(--muted);margin-bottom:10px;">Ingresa tu cédula y te generamos una clave nueva en pantalla. Apúntala, la vas a necesitar para ingresar.</p>
+        <label class="field" style="margin-bottom:10px;">Cédula
+          <input type="text" id="recuperarCedula" placeholder="Tu número de cédula" />
+        </label>
+        <div id="recuperarError" class="errmsg"></div>
+        <div id="recuperarResultado" style="display:none;background:#EAF7F0;border:1px solid #BCE6CD;border-radius:10px;padding:12px;margin-bottom:10px;font-size:13px;"></div>
+        <button class="secondary" id="btnRecuperar" style="width:100%;justify-content:center;">Generar clave nueva</button>
+      </div>
     </div>
   </div>
 
@@ -197,6 +209,12 @@
       <label class="field" style="margin-top:12px;" id="wrapPerfilFondo">Valor de fondo asignado
         <input type="number" id="perfilFondo" />
       </label>
+      <div id="wrapNuevaClave" style="display:none;background:#FFF6E5;border:1px solid #F3D98B;border-radius:10px;padding:14px;margin-top:16px;">
+        <div style="font-size:12.5px;font-weight:700;color:#7A5B00;margin-bottom:4px;">🔒 Primer ingreso: crea tu clave personal</div>
+        <p style="font-size:11.5px;color:#7A5B00;margin-bottom:10px;">Por seguridad, reemplaza la clave compartida por una propia antes de continuar. Apúntala, la vas a necesitar la próxima vez.</p>
+        <label class="field">Nueva clave<input type="text" id="perfilNuevaClave" style="text-transform:uppercase;" /></label>
+        <label class="field" style="margin-top:10px;">Repite la nueva clave<input type="text" id="perfilNuevaClave2" style="text-transform:uppercase;" /></label>
+      </div>
       <div id="perfilError" class="errmsg"></div>
       <button class="primary" id="btnConfirmarPerfil" style="width:100%;justify-content:center;margin-top:16px;">Confirmar y continuar</button>
     </div>
@@ -429,6 +447,7 @@ const DIAS_LABELS = ["Día 1","Día 2","Día 3","Día 4","Día 5","Día 6","Día
 let puntosEfectivos = PUNTOS.map(p => ({ ...p }));
 
 function aplicarPerfilesConocidos(usuarios){
+  puntosEfectivos = PUNTOS.map(p => ({ ...p })); // parte siempre de los valores estáticos, así una edición o eliminación se refleja bien
   (usuarios || []).forEach(u => {
     if (!u.Punto) return;
     const idx = puntosEfectivos.findIndex(p => p.codigo === u.Punto);
@@ -1421,6 +1440,18 @@ function fetchLoginJSONP(codigo){
   });
 }
 
+function fetchRecuperarJSONP(cedula){
+  return new Promise((resolve)=>{
+    const cbName = "cbr_" + Date.now() + "_" + Math.floor(Math.random()*10000);
+    const script = document.createElement("script");
+    const cleanup = ()=>{ delete window[cbName]; script.remove(); };
+    window[cbName] = function(data){ resolve(data); cleanup(); };
+    script.onerror = ()=>{ resolve({ ok:false, error:"No se pudo contactar al servidor." }); cleanup(); };
+    script.src = `${CONFIG.API_URL}?action=recuperar&cedula=${encodeURIComponent(cedula)}&callback=${cbName}&_=${Date.now()}`;
+    document.body.appendChild(script);
+  });
+}
+
 function fetchUsuariosJSONP(){
   return new Promise((resolve)=>{
     const cbName = "cbu_" + Date.now() + "_" + Math.floor(Math.random()*10000);
@@ -1433,12 +1464,13 @@ function fetchUsuariosJSONP(){
   });
 }
 
-function guardarPerfilBackend(){
+function guardarPerfilBackend(codigoOriginal){
   const form = document.getElementById("postForm");
   form.innerHTML = "";
   form.action = CONFIG.API_URL;
   const fields = {
-    accion: "perfil", codigo: session.codigo, nombre: session.nombre, apellido: session.apellido,
+    accion: "perfil", codigo: session.codigo, codigoOriginal: codigoOriginal || session.codigo,
+    nombre: session.nombre, apellido: session.apellido,
     cedula: session.cedula, punto: session.punto || "", fondo: session.fondo || 0,
   };
   Object.keys(fields).forEach(k=>{
@@ -1446,10 +1478,12 @@ function guardarPerfilBackend(){
     inp.type = "hidden"; inp.name = k; inp.value = fields[k];
     form.appendChild(inp);
   });
-  const iframe = document.querySelector('iframe[name="hidden_iframe"]');
-  const onLoad = ()=>{ iframe.removeEventListener("load", onLoad); };
-  iframe.addEventListener("load", onLoad);
-  form.submit();
+  return new Promise((resolve)=>{
+    const iframe = document.querySelector('iframe[name="hidden_iframe"]');
+    const onLoad = ()=>{ iframe.removeEventListener("load", onLoad); resolve(); };
+    iframe.addEventListener("load", onLoad);
+    form.submit();
+  });
 }
 
 async function intentarLogin(){
@@ -1474,8 +1508,49 @@ async function intentarLogin(){
     codigo: u.Codigo, rol: u.Rol,
     nombre: u.Nombre || "", apellido: u.Apellido || "", cedula: u.Cedula || "",
     punto: u.Punto || "", fondo: Number(u.Fondo) || 0,
+    primeraVez: !(u.Nombre || u.Apellido), // sin nombre guardado = todavía no confirmó su perfil nunca
   };
   mostrarPantallaPerfil();
+}
+
+function toggleRecuperar(){
+  const wrap = document.getElementById("recuperarWrap");
+  const abrir = wrap.style.display === "none";
+  wrap.style.display = abrir ? "" : "none";
+  document.getElementById("btnMostrarRecuperar").textContent = abrir ? "Cancelar" : "¿Olvidaste tu clave?";
+  if (!abrir){
+    document.getElementById("recuperarCedula").value = "";
+    document.getElementById("recuperarError").textContent = "";
+    document.getElementById("recuperarResultado").style.display = "none";
+  }
+}
+
+async function recuperarClave(){
+  const cedula = document.getElementById("recuperarCedula").value.trim();
+  document.getElementById("recuperarError").textContent = "";
+  document.getElementById("recuperarResultado").style.display = "none";
+  if (!cedula){
+    document.getElementById("recuperarError").textContent = "Ingresa tu número de cédula.";
+    return;
+  }
+  if (CONFIG.API_URL.indexOf("PEGA_AQUI") === 0){
+    document.getElementById("recuperarError").textContent = "Falta configurar CONFIG.API_URL.";
+    return;
+  }
+  const btn = document.getElementById("btnRecuperar");
+  btn.disabled = true; btn.textContent = "Buscando...";
+  const data = await fetchRecuperarJSONP(cedula);
+  btn.disabled = false; btn.textContent = "Generar clave nueva";
+
+  if (!data || !data.ok){
+    document.getElementById("recuperarError").textContent = (data && data.error) || "No se pudo recuperar la clave.";
+    return;
+  }
+  const nombreTxt = (data.nombre || data.apellido) ? `${data.nombre||""} ${data.apellido||""}`.trim() + ", tu" : "Tu";
+  const res = document.getElementById("recuperarResultado");
+  res.style.display = "";
+  res.innerHTML = `${nombreTxt} nueva clave es: <strong style="font-size:16px;">${data.codigoNuevo}</strong><br>Apúntala y úsala para ingresar ahora.`;
+  document.getElementById("loginCodigo").value = data.codigoNuevo;
 }
 
 function mostrarPantallaPerfil(){
@@ -1485,6 +1560,8 @@ function mostrarPantallaPerfil(){
   document.getElementById("perfilApellido").value = session.apellido;
   document.getElementById("perfilCedula").value = session.cedula;
   document.getElementById("perfilFondo").value = session.fondo || "";
+  document.getElementById("perfilNuevaClave").value = "";
+  document.getElementById("perfilNuevaClave2").value = "";
 
   const esAdm = session.rol === "admin";
   document.getElementById("wrapPerfilPunto").style.display = esAdm ? "none" : "";
@@ -1494,6 +1571,11 @@ function mostrarPantallaPerfil(){
       `<option value="${p.codigo}" ${p.codigo===session.punto?"selected":""}>${p.codigo} — ${p.contrato}</option>`
     ).join("");
   }
+
+  // Un supervisor que entra por primera vez (con la clave compartida) debe
+  // definir su propia clave personal antes de poder continuar.
+  const requiereNuevaClave = session.primeraVez && session.rol !== "admin";
+  document.getElementById("wrapNuevaClave").style.display = requiereNuevaClave ? "" : "none";
 }
 
 async function confirmarPerfil(){
@@ -1505,13 +1587,35 @@ async function confirmarPerfil(){
     document.getElementById("perfilError").textContent = "Completa nombre, apellido y cédula.";
     return;
   }
+
+  const codigoOriginal = session.codigo;
+  const requiereNuevaClave = session.primeraVez && session.rol !== "admin";
+  if (requiereNuevaClave){
+    const nueva = document.getElementById("perfilNuevaClave").value.trim().toUpperCase();
+    const nueva2 = document.getElementById("perfilNuevaClave2").value.trim().toUpperCase();
+    if (!nueva || nueva.length < 4){
+      document.getElementById("perfilError").textContent = "La nueva clave debe tener al menos 4 caracteres.";
+      return;
+    }
+    if (nueva !== nueva2){
+      document.getElementById("perfilError").textContent = "Las dos claves no coinciden.";
+      return;
+    }
+    session.codigo = nueva;
+  }
+
   session.nombre = nombre; session.apellido = apellido; session.cedula = cedula;
   if (session.rol !== "admin"){
     session.punto = document.getElementById("perfilPunto").value;
     session.fondo = Number(document.getElementById("perfilFondo").value) || 0;
   }
-  guardarPerfilBackend();
+  session.primeraVez = false;
+
+  await guardarPerfilBackend(codigoOriginal);
   guardarSesionLocal();
+  if (requiereNuevaClave){
+    toast(`Clave actualizada a "${session.codigo}". Guárdala para tu próximo ingreso.`);
+  }
   await iniciarApp();
 }
 
@@ -1630,7 +1734,7 @@ function abrirFormUsuario(u){
   document.getElementById("usuarioError").textContent = "";
 
   document.getElementById("uCodigo").value = u ? u.Codigo : "";
-  document.getElementById("uCodigo").disabled = !!u; // no se puede renombrar un código existente
+  document.getElementById("uCodigo").disabled = false; // ahora se puede cambiar el código también al editar
   document.getElementById("uRol").value = u ? u.Rol : "supervisor";
   document.getElementById("uNombre").value = u ? (u.Nombre||"") : "";
   document.getElementById("uApellido").value = u ? (u.Apellido||"") : "";
@@ -1665,19 +1769,27 @@ async function guardarUsuarioForm(){
 
   document.getElementById("usuarioError").textContent = "";
   if (!codigo){ document.getElementById("usuarioError").textContent = "El código de acceso es obligatorio."; return; }
-  if (!usuarioEditando && usuariosConocidos.some(u=>u.Codigo===codigo)){
+  const choque = usuariosConocidos.find(u=>u.Codigo===codigo);
+  if (choque && codigo !== usuarioEditando){
     document.getElementById("usuarioError").textContent = "Ya existe un usuario con ese código.";
     return;
   }
 
   const btn = document.getElementById("btnGuardarUsuario");
   btn.disabled = true; btn.textContent = "Guardando...";
-  await enviarPostBackend({ accion:"guardarUsuario", codigo, rol, nombre, apellido, cedula, punto, fondo });
+  await enviarPostBackend({ accion:"guardarUsuario", codigo, codigoOriginal: usuarioEditando || "", rol, nombre, apellido, cedula, punto, fondo });
   btn.disabled = false; btn.textContent = "💾 Guardar";
 
   toast("Usuario guardado.");
   cerrarFormUsuario();
   await cargarYRenderUsuarios();
+
+  // Refresca de inmediato los datos "vivos" (responsable/cédula/fondo por punto)
+  // para que un Excel/PDF generado ahora mismo, sin recargar la página, ya
+  // refleje el cambio (por ejemplo, si se corrigió el nombre del supervisor).
+  aplicarPerfilesConocidos(usuariosConocidos);
+  renderChips();
+  renderResults();
 }
 
 async function eliminarUsuarioForm(){
@@ -1687,6 +1799,9 @@ async function eliminarUsuarioForm(){
   toast("Usuario eliminado.");
   cerrarFormUsuario();
   await cargarYRenderUsuarios();
+  aplicarPerfilesConocidos(usuariosConocidos);
+  renderChips();
+  renderResults();
 }
 
 
@@ -1711,6 +1826,9 @@ document.getElementById("filtroPuntoTodos").addEventListener("change", (e)=>{
 document.getElementById("btnLogin").addEventListener("click", intentarLogin);
 document.getElementById("loginCodigo").addEventListener("keydown", e=>{ if (e.key==="Enter") intentarLogin(); });
 document.getElementById("btnConfirmarPerfil").addEventListener("click", confirmarPerfil);
+document.getElementById("btnMostrarRecuperar").addEventListener("click", toggleRecuperar);
+document.getElementById("btnRecuperar").addEventListener("click", recuperarClave);
+document.getElementById("recuperarCedula").addEventListener("keydown", e=>{ if (e.key==="Enter") recuperarClave(); });
 
 document.getElementById("puntoCod").addEventListener("change", e=>{
   state.puntoCod = e.target.value; state.saved = false; renderChips(); renderResults();
