@@ -59,6 +59,7 @@
   .errmsg{color:#C0392B;font-size:12.5px;margin-bottom:10px;}
   .btnrow{display:flex;gap:10px;flex-wrap:wrap;}
   button.primary{display:inline-flex;align-items:center;gap:8px;background:var(--navy);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-size:13.5px;font-weight:700;cursor:pointer;}
+  .btn-danger{display:inline-flex;align-items:center;gap:8px;background:var(--red);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-size:13.5px;font-weight:700;cursor:pointer;}
   button.secondary{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--navy);border:1.5px solid var(--navy);border-radius:10px;padding:11px 18px;font-size:13.5px;font-weight:700;cursor:pointer;}
   button:disabled{opacity:.45;cursor:not-allowed !important;}
   .hist-head{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-weight:800;color:var(--navy);font-size:14.5px;}
@@ -217,7 +218,7 @@
       </div>
       <div id="perfilError" class="errmsg"></div>
       <button class="primary" id="btnConfirmarPerfil" style="width:100%;justify-content:center;margin-top:16px;">Confirmar y continuar</button>
-      <button id="btnCancelarPerfil" style="width:100%;background:none;border:none;color:var(--muted);font-size:12.5px;text-decoration:underline;cursor:pointer;margin-top:12px;">Cancelar y volver a ingresar código</button>
+      <button id="btnCancelarPerfil" class="btn-danger" style="width:100%;justify-content:center;margin-top:10px;">Cancelar y volver a ingresar código</button>
     </div>
   </div>
 
