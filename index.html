@@ -421,6 +421,33 @@
         <button class="secondary" id="btnCancelarUsuario">Cancelar</button>
       </div>
     </div>
+
+    <div class="card no-print" style="margin-top:24px;">
+      <div class="hist-head">📍 Puntos (fincas / contratos)</div>
+      <div class="hist-list" id="puntosList" style="max-height:360px;"></div>
+      <button class="secondary" id="btnNuevoPunto" style="margin-top:14px;">➕ Nuevo punto</button>
+    </div>
+
+    <div class="card no-print" id="puntoFormWrap" style="display:none;margin-top:16px;">
+      <div class="section-label" id="puntoFormTitle">Nuevo punto</div>
+      <div class="row2">
+        <label class="field">Código
+          <input type="text" id="ptCodigo" placeholder="Ej. R8" style="text-transform:uppercase;" />
+        </label>
+        <label class="field">Contrato / Nombre
+          <input type="text" id="ptContrato" placeholder="Ej. ROSAPRIMA 8" />
+        </label>
+      </div>
+      <label class="field" style="margin-top:12px;max-width:220px;">Valor de fondo
+        <input type="number" id="ptFondo" />
+      </label>
+      <div id="puntoError" class="errmsg" style="margin-top:10px;"></div>
+      <div class="btnrow" style="margin-top:14px;">
+        <button class="primary" id="btnGuardarPunto">💾 Guardar</button>
+        <button class="secondary" id="btnEliminarPunto" style="display:none;">🗑️ Eliminar</button>
+        <button class="secondary" id="btnCancelarPunto">Cancelar</button>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -463,10 +490,11 @@ const DIAS_LABELS = ["Día 1","Día 2","Día 3","Día 4","Día 5","Día 6","Día
 // Copia "viva" de PUNTOS: cuando un supervisor confirma/edita su perfil (nombre,
 // cédula, fondo), esos datos reemplazan aquí a los valores estáticos de arriba,
 // tanto para su propia sesión como para cuando el administrador seleccione ese punto.
-let puntosEfectivos = PUNTOS.map(p => ({ ...p }));
+let puntosBase = PUNTOS.map(p => ({ codigo:p.codigo, contrato:p.contrato, valorFondo:p.valorFondo, responsable:p.responsable, cedula:p.cedula }));
+let puntosEfectivos = puntosBase.map(p => ({ ...p }));
 
 function aplicarPerfilesConocidos(usuarios){
-  puntosEfectivos = PUNTOS.map(p => ({ ...p })); // parte siempre de los valores estáticos, así una edición o eliminación se refleja bien
+  puntosEfectivos = puntosBase.map(p => ({ ...p })); // parte siempre de los puntos vigentes, así una edición o eliminación se refleja bien
   (usuarios || []).forEach(u => {
     if (!u.Punto) return;
     const idx = puntosEfectivos.findIndex(p => p.codigo === u.Punto);
@@ -479,6 +507,16 @@ function aplicarPerfilesConocidos(usuarios){
       };
     }
   });
+}
+
+async function cargarPuntosBase(){
+  const fetched = await fetchPuntosJSONP();
+  if (fetched && fetched.length){
+    puntosBase = fetched.map(p => ({
+      codigo: p.Codigo, contrato: p.Contrato, valorFondo: Number(p.ValorFondo) || 0,
+      responsable: "", cedula: "",
+    }));
+  }
 }
 
 
@@ -514,7 +552,7 @@ function fetchImagenBase64JSONP(id){
     const cleanup = ()=>{ delete window[cbName]; script.remove(); };
     window[cbName] = function(data){ resolve(data && data.ok ? data.dataUrl : null); cleanup(); };
     script.onerror = ()=>{ resolve(null); cleanup(); };
-    script.src = `${CONFIG.API_URL}?action=imagen&id=${encodeURIComponent(id)}&callback=${cbName}&_=${Date.now()}`;
+    script.src = `${CONFIG.API_URL}?action=imagen&id=${encodeURIComponent(id)}&codigo=${encodeURIComponent(session?session.codigo:"")}&callback=${cbName}&_=${Date.now()}`;
     document.body.appendChild(script);
   });
 }
@@ -736,7 +774,7 @@ function fetchHistorialJSONP(){
       cleanup();
     };
     script.onerror = ()=>{ resolve([]); cleanup(); };
-    script.src = `${CONFIG.API_URL}?action=listar&callback=${cbName}&_=${Date.now()}`;
+    script.src = `${CONFIG.API_URL}?action=listar&codigo=${encodeURIComponent(session?session.codigo:"")}&callback=${cbName}&_=${Date.now()}`;
     document.body.appendChild(script);
   });
 }
@@ -751,7 +789,7 @@ function fetchTodoHistoricoJSONP(){
       cleanup();
     };
     script.onerror = ()=>{ resolve([]); cleanup(); };
-    script.src = `${CONFIG.API_URL}?action=historial&callback=${cbName}&_=${Date.now()}`;
+    script.src = `${CONFIG.API_URL}?action=historial&codigo=${encodeURIComponent(session?session.codigo:"")}&callback=${cbName}&_=${Date.now()}`;
     document.body.appendChild(script);
   });
 }
@@ -787,6 +825,7 @@ function guardarRegistro(){
 
   const p = punto();
   const fields = {
+    codigo: session.codigo,
     punto: state.puntoCod,
     contrato: p.contrato,
     responsable: p.responsable,
@@ -1347,7 +1386,7 @@ function cambiarPantalla(nombre){
   document.getElementById("tabBtnInformes").classList.toggle("active", nombre==="informes");
   document.getElementById("tabBtnUsuarios").classList.toggle("active", nombre==="usuarios");
   if (nombre==="informes" && historico===null) cargarHistoricoCompleto();
-  if (nombre==="usuarios") cargarYRenderUsuarios();
+  if (nombre==="usuarios"){ cargarYRenderUsuarios(); cargarYRenderPuntos(); }
 }
 
 async function cargarHistoricoCompleto(){
@@ -1568,10 +1607,23 @@ function fetchUsuariosJSONP(){
     const cleanup = ()=>{ delete window[cbName]; script.remove(); };
     window[cbName] = function(data){ resolve((data && data.usuarios) ? data.usuarios : []); cleanup(); };
     script.onerror = ()=>{ resolve([]); cleanup(); };
-    script.src = `${CONFIG.API_URL}?action=usuarios&callback=${cbName}&_=${Date.now()}`;
+    script.src = `${CONFIG.API_URL}?action=usuarios&codigo=${encodeURIComponent(session?session.codigo:"")}&callback=${cbName}&_=${Date.now()}`;
     document.body.appendChild(script);
   });
 }
+
+function fetchPuntosJSONP(){
+  return new Promise((resolve)=>{
+    const cbName = "cbp_" + Date.now() + "_" + Math.floor(Math.random()*10000);
+    const script = document.createElement("script");
+    const cleanup = ()=>{ delete window[cbName]; script.remove(); };
+    window[cbName] = function(data){ resolve((data && data.puntos) ? data.puntos : []); cleanup(); };
+    script.onerror = ()=>{ resolve([]); cleanup(); };
+    script.src = `${CONFIG.API_URL}?action=puntos&codigo=${encodeURIComponent(session?session.codigo:"")}&callback=${cbName}&_=${Date.now()}`;
+    document.body.appendChild(script);
+  });
+}
+
 
 function guardarPerfilBackend(codigoOriginal){
   const form = document.getElementById("postForm");
@@ -1677,7 +1729,7 @@ function mostrarPantallaPerfil(){
   document.getElementById("wrapPerfilPunto").style.display = esAdm ? "none" : "";
   document.getElementById("wrapPerfilFondo").style.display = esAdm ? "none" : "";
   if (!esAdm){
-    document.getElementById("perfilPunto").innerHTML = PUNTOS.map(p=>
+    document.getElementById("perfilPunto").innerHTML = puntosBase.map(p=>
       `<option value="${p.codigo}" ${p.codigo===session.punto?"selected":""}>${p.codigo} — ${p.contrato}</option>`
     ).join("");
   }
@@ -1775,6 +1827,7 @@ async function iniciarApp(){
     document.getElementById("puntoCod").disabled = false;
   }
 
+  await cargarPuntosBase();
   usuariosConocidos = await fetchUsuariosJSONP();
   aplicarPerfilesConocidos(usuariosConocidos);
   // Asegura que el propio perfil recién confirmado quede reflejado de inmediato,
@@ -1868,7 +1921,7 @@ function abrirFormUsuario(u){
   document.getElementById("uApellido").value = u ? (u.Apellido||"") : "";
   document.getElementById("uCedula").value = u ? (u.Cedula||"") : "";
   document.getElementById("uFondo").value = u ? (u.Fondo||"") : "";
-  document.getElementById("uPunto").innerHTML = PUNTOS.map(p=>`<option value="${p.codigo}">${p.codigo} — ${p.contrato}</option>`).join("");
+  document.getElementById("uPunto").innerHTML = puntosBase.map(p=>`<option value="${p.codigo}">${p.codigo} — ${p.contrato}</option>`).join("");
   if (u && u.Punto) document.getElementById("uPunto").value = u.Punto;
   document.getElementById("btnEliminarUsuario").style.display = u ? "" : "none";
 
@@ -1905,7 +1958,7 @@ async function guardarUsuarioForm(){
 
   const btn = document.getElementById("btnGuardarUsuario");
   btn.disabled = true; btn.textContent = "Guardando...";
-  await enviarPostBackend({ accion:"guardarUsuario", codigo, codigoOriginal: usuarioEditando || "", rol, nombre, apellido, cedula, punto, fondo });
+  await enviarPostBackend({ accion:"guardarUsuario", codigoSolicitante: session.codigo, codigo, codigoOriginal: usuarioEditando || "", rol, nombre, apellido, cedula, punto, fondo });
   btn.disabled = false; btn.textContent = "💾 Guardar";
 
   toast("Usuario guardado.");
@@ -1923,11 +1976,110 @@ async function guardarUsuarioForm(){
 async function eliminarUsuarioForm(){
   if (!usuarioEditando) return;
   if (!confirm(`¿Eliminar la clave "${usuarioEditando}"? Esta acción no se puede deshacer.`)) return;
-  await enviarPostBackend({ accion:"eliminarUsuario", codigo: usuarioEditando });
+  await enviarPostBackend({ accion:"eliminarUsuario", codigoSolicitante: session.codigo, codigo: usuarioEditando });
   toast("Usuario eliminado.");
   cerrarFormUsuario();
   await cargarYRenderUsuarios();
   aplicarPerfilesConocidos(usuariosConocidos);
+  renderChips();
+  renderResults();
+}
+
+// =============================================================================
+// GESTIÓN DE PUNTOS (fincas / contratos) — solo administrador
+// =============================================================================
+let puntoEditando = null; // código del punto que se está editando, o null si es nuevo
+let puntosParaAdmin = [];
+
+async function cargarYRenderPuntos(){
+  document.getElementById("puntosList").innerHTML = `<div style="font-size:12.5px;color:var(--faint);">Cargando…</div>`;
+  const fetched = await fetchPuntosJSONP();
+  puntosParaAdmin = fetched;
+  renderPuntosList();
+}
+
+function renderPuntosList(){
+  const cont = document.getElementById("puntosList");
+  if (!puntosParaAdmin.length){
+    cont.innerHTML = `<div style="font-size:12.5px;color:var(--faint);">No hay puntos registrados.</div>`;
+    return;
+  }
+  const orden = [...puntosParaAdmin].sort((a,b)=>String(a.Codigo).localeCompare(String(b.Codigo)));
+  cont.innerHTML = orden.map(p=>`
+    <div class="hist-item">
+      <div class="hist-top">
+        <div class="hist-title">${p.Codigo}</div>
+        <span class="badge ok">${money(p.ValorFondo)}</span>
+      </div>
+      <div class="hist-sub">${p.Contrato||""}</div>
+      <div class="hist-bottom">
+        <div></div>
+        <button class="tinybtn" data-editp="${p.Codigo}">✏️ Editar</button>
+      </div>
+    </div>`).join("");
+  document.querySelectorAll("[data-editp]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const p = puntosParaAdmin.find(x=>x.Codigo===btn.dataset.editp);
+      if (p) abrirFormPunto(p);
+    });
+  });
+}
+
+function abrirFormPunto(p){
+  puntoEditando = p ? p.Codigo : null;
+  document.getElementById("puntoFormWrap").style.display = "";
+  document.getElementById("puntoFormTitle").textContent = p ? `Editar punto: ${p.Codigo}` : "Nuevo punto";
+  document.getElementById("puntoError").textContent = "";
+  document.getElementById("ptCodigo").value = p ? p.Codigo : "";
+  document.getElementById("ptContrato").value = p ? (p.Contrato||"") : "";
+  document.getElementById("ptFondo").value = p ? (p.ValorFondo||"") : "";
+  document.getElementById("btnEliminarPunto").style.display = p ? "" : "none";
+}
+
+function cerrarFormPunto(){
+  document.getElementById("puntoFormWrap").style.display = "none";
+  puntoEditando = null;
+}
+
+async function guardarPuntoForm(){
+  const codigo = document.getElementById("ptCodigo").value.trim().toUpperCase();
+  const contrato = document.getElementById("ptContrato").value.trim();
+  const fondo = document.getElementById("ptFondo").value;
+
+  document.getElementById("puntoError").textContent = "";
+  if (!codigo){ document.getElementById("puntoError").textContent = "El código del punto es obligatorio."; return; }
+  if (!contrato){ document.getElementById("puntoError").textContent = "El nombre del contrato es obligatorio."; return; }
+  const choque = puntosParaAdmin.find(p=>p.Codigo===codigo);
+  if (choque && codigo !== puntoEditando){
+    document.getElementById("puntoError").textContent = "Ya existe un punto con ese código.";
+    return;
+  }
+
+  const btn = document.getElementById("btnGuardarPunto");
+  btn.disabled = true; btn.textContent = "Guardando...";
+  await enviarPostBackend({ accion:"guardarPunto", codigoSolicitante: session.codigo, codigo, codigoOriginal: puntoEditando || "", contrato, valorFondo: fondo });
+  btn.disabled = false; btn.textContent = "💾 Guardar";
+
+  toast("Punto guardado.");
+  cerrarFormPunto();
+  await cargarYRenderPuntos();
+  await cargarPuntosBase();
+  aplicarPerfilesConocidos(usuariosConocidos);
+  renderSelect();
+  renderChips();
+  renderResults();
+}
+
+async function eliminarPuntoForm(){
+  if (!puntoEditando) return;
+  if (!confirm(`¿Eliminar el punto "${puntoEditando}"? Los registros ya guardados con este punto no se borran, pero ya no aparecerá para elegir.`)) return;
+  await enviarPostBackend({ accion:"eliminarPunto", codigoSolicitante: session.codigo, codigo: puntoEditando });
+  toast("Punto eliminado.");
+  cerrarFormPunto();
+  await cargarYRenderPuntos();
+  await cargarPuntosBase();
+  aplicarPerfilesConocidos(usuariosConocidos);
+  renderSelect();
   renderChips();
   renderResults();
 }
@@ -1944,6 +2096,10 @@ document.getElementById("uRol").addEventListener("change", actualizarVisibilidad
 document.getElementById("btnGuardarUsuario").addEventListener("click", guardarUsuarioForm);
 document.getElementById("btnEliminarUsuario").addEventListener("click", eliminarUsuarioForm);
 document.getElementById("btnCancelarUsuario").addEventListener("click", cerrarFormUsuario);
+document.getElementById("btnNuevoPunto").addEventListener("click", ()=>abrirFormPunto(null));
+document.getElementById("btnGuardarPunto").addEventListener("click", guardarPuntoForm);
+document.getElementById("btnEliminarPunto").addEventListener("click", eliminarPuntoForm);
+document.getElementById("btnCancelarPunto").addEventListener("click", cerrarFormPunto);
 document.getElementById("filtroTipo").addEventListener("change", actualizarVisibilidadFiltros);
 document.getElementById("btnGenerarInforme").addEventListener("click", generarInforme);
 document.getElementById("btnImprimirInforme").addEventListener("click", ()=> window.print());
