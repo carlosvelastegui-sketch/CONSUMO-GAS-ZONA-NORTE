@@ -76,6 +76,30 @@
   .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   .cfgwarn{background:#FFF6E5;border:1px solid #F3D98B;color:#7A5B00;border-radius:10px;padding:10px 14px;font-size:12.5px;margin-bottom:16px;}
+
+  .tabs{display:flex;gap:8px;margin-bottom:18px;border-bottom:1.5px solid var(--line);}
+  .tabbtn{background:none;border:none;padding:10px 16px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;}
+  .tabbtn.active{color:var(--navy);border-bottom-color:var(--navy);}
+
+  .reptable{width:100%;border-collapse:collapse;margin-bottom:6px;font-size:12px;}
+  .reptable th{background:var(--navy);color:#fff;text-align:left;padding:7px 9px;font-size:11px;}
+  .reptable td{padding:6px 9px;border-bottom:1px solid var(--line);}
+  .reptable tr:nth-child(even) td{background:var(--soft);}
+  .reptable td.num, .reptable th.num{text-align:right;}
+  .reporte-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--navy);padding-bottom:10px;}
+  .reporte-title{font-size:17px;font-weight:800;color:var(--navy);}
+  .reporte-sub{font-size:12.5px;color:var(--muted);margin-top:3px;}
+  .reporte-fecha{font-size:11px;color:var(--faint);}
+  .reporte-total{margin-top:14px;text-align:right;font-size:14px;font-weight:800;color:var(--navy);}
+
+  @media print{
+    body{background:#fff;}
+    .no-print, .tabs, .header, .toast{display:none !important;}
+    #screenRegistro{display:none !important;}
+    .card{box-shadow:none;border:none;padding:0;}
+    #reporteWrap{display:block !important;}
+    @page{ size:landscape; margin:14mm; }
+  }
 </style>
 </head>
 <body>
@@ -88,10 +112,16 @@
     </div>
   </div>
 
+  <div class="tabs no-print">
+    <button class="tabbtn active" id="tabBtnRegistro">Registro semanal</button>
+    <button class="tabbtn" id="tabBtnInformes">Historial e Informes</button>
+  </div>
+
   <div id="cfgwarn" class="cfgwarn" style="display:none;">
     ⚠️ Falta configurar la URL del backend (Google Apps Script). Edita <code>CONFIG.API_URL</code> en el archivo <code>index.html</code>.
   </div>
 
+  <div id="screenRegistro">
   <div class="grid">
     <!-- FORM -->
     <div class="card">
@@ -155,6 +185,58 @@
   </div>
 
   <div class="footnote" id="footnote"></div>
+  </div>
+
+  <!-- ============================= INFORMES ============================= -->
+  <div id="screenInformes" style="display:none;">
+    <div class="card no-print">
+      <div class="section-label">Filtrar histórico</div>
+      <div class="row2" style="grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+        <label class="field">Tipo de filtro
+          <select id="filtroTipo">
+            <option value="semana">Semana</option>
+            <option value="mes">Mes</option>
+            <option value="anio">Año</option>
+          </select>
+        </label>
+        <label class="field" id="wrapFiltroSemana">Semana (fecha de reposición)
+          <select id="filtroSemana"></select>
+        </label>
+        <label class="field" id="wrapFiltroMes" style="display:none;">Mes
+          <select id="filtroMes"></select>
+        </label>
+      </div>
+      <label class="field" id="wrapFiltroAnio" style="max-width:200px;margin-bottom:14px;display:none;">Año
+        <select id="filtroAnio"></select>
+      </label>
+      <div class="btnrow">
+        <button class="primary" id="btnGenerarInforme">📊 Generar informe</button>
+        <button class="secondary" id="btnImprimirInforme" disabled>🖨️ Imprimir / Guardar PDF</button>
+      </div>
+      <div id="informeStatus" style="font-size:12.5px;color:var(--faint);margin-top:10px;"></div>
+    </div>
+
+    <div class="card" id="reporteWrap" style="display:none;">
+      <div id="reportePrintArea">
+        <div class="reporte-header">
+          <div>
+            <div class="reporte-title">Informe de Consumo de Gas — Grupo Hanaska</div>
+            <div class="reporte-sub" id="reportePeriodo"></div>
+          </div>
+          <div class="reporte-fecha" id="reporteFechaGen"></div>
+        </div>
+
+        <div class="section-label" style="margin-top:18px;">Resumen por punto</div>
+        <table class="reptable" id="tablaResumen"></table>
+
+        <div class="section-label" style="margin-top:18px;">Detalle de registros</div>
+        <table class="reptable" id="tablaDetalle"></table>
+
+        <div class="reporte-total" id="reporteTotalGeneral"></div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -432,6 +514,21 @@ function fetchHistorialJSONP(){
   });
 }
 
+function fetchTodoHistoricoJSONP(){
+  return new Promise((resolve)=>{
+    const cbName = "cbh_" + Date.now() + "_" + Math.floor(Math.random()*10000);
+    const script = document.createElement("script");
+    const cleanup = ()=>{ delete window[cbName]; script.remove(); };
+    window[cbName] = function(data){
+      resolve((data && data.registros) ? data.registros : []);
+      cleanup();
+    };
+    script.onerror = ()=>{ resolve([]); cleanup(); };
+    script.src = `${CONFIG.API_URL}?action=historial&callback=${cbName}&_=${Date.now()}`;
+    document.body.appendChild(script);
+  });
+}
+
 async function cargarHistorial(){
   state.history = null;
   renderHistory();
@@ -521,7 +618,7 @@ function bordeRango(ws, r1, c1, r2, c2){
 
 function construirHojaCCHH(wb, r, imagenesInline){
   const sh = wb.addWorksheet(`CCHH ${r.punto}`, {
-    pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+    pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true, verticalCentered: true }
   });
   const anchos = { B:11.7,C:13.6,D:16.9,E:16,F:19.9,G:7.3,H:21.4,I:10.3,J:7.7,K:10.6,L:11.6,M:13.6 };
   Object.values(anchos).forEach((w,i)=>{ sh.getColumn(i+2).width = w; });
@@ -788,8 +885,124 @@ async function descargarExcelDesdeRegistro(r, btn){
 
 
 // =============================================================================
+// HISTORIAL E INFORMES (filtro por semana / mes / año + impresión a PDF)
+// =============================================================================
+const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+let historico = null; // se carga la primera vez que se entra a la pestaña Informes
+
+function cambiarPantalla(nombre){
+  document.getElementById("screenRegistro").style.display = nombre==="registro" ? "" : "none";
+  document.getElementById("screenInformes").style.display = nombre==="informes" ? "" : "none";
+  document.getElementById("tabBtnRegistro").classList.toggle("active", nombre==="registro");
+  document.getElementById("tabBtnInformes").classList.toggle("active", nombre==="informes");
+  if (nombre==="informes" && historico===null) cargarHistoricoCompleto();
+}
+
+async function cargarHistoricoCompleto(){
+  document.getElementById("informeStatus").textContent = "Cargando histórico completo…";
+  historico = await fetchTodoHistoricoJSONP();
+  document.getElementById("informeStatus").textContent = historico.length
+    ? `${historico.length} registro(s) cargados desde la semana activa y las semanas archivadas.`
+    : "No se encontraron registros guardados todavía.";
+  poblarFiltros();
+}
+
+function poblarFiltros(){
+  const semanas = [...new Set(historico.map(r=>r.FechaReposicion).filter(Boolean))].sort().reverse();
+  document.getElementById("filtroSemana").innerHTML = semanas.map(f=>{
+    const d = new Date(f+"T00:00:00");
+    return `<option value="${f}">${fmtDate(d)}</option>`;
+  }).join("") || `<option value="">(sin datos)</option>`;
+
+  const anios = [...new Set(historico.map(r=>(r.FechaReposicion||"").slice(0,4)).filter(Boolean))].sort().reverse();
+  const anioOptions = anios.map(a=>`<option value="${a}">${a}</option>`).join("") || `<option value="">(sin datos)</option>`;
+  document.getElementById("filtroAnio").innerHTML = anioOptions;
+
+  document.getElementById("filtroMes").innerHTML = MESES.map((m,i)=>`<option value="${i+1}">${m}</option>`).join("");
+}
+
+function actualizarVisibilidadFiltros(){
+  const tipo = document.getElementById("filtroTipo").value;
+  document.getElementById("wrapFiltroSemana").style.display = tipo==="semana" ? "" : "none";
+  document.getElementById("wrapFiltroMes").style.display = tipo==="mes" ? "" : "none";
+  document.getElementById("wrapFiltroAnio").style.display = (tipo==="mes"||tipo==="anio") ? "" : "none";
+}
+
+function filtrarHistorico(){
+  const tipo = document.getElementById("filtroTipo").value;
+  if (tipo === "semana"){
+    const f = document.getElementById("filtroSemana").value;
+    return { filas: historico.filter(r=>r.FechaReposicion===f), etiqueta: f ? `Semana con reposición ${fmtDate(new Date(f+"T00:00:00"))}` : "" };
+  }
+  if (tipo === "mes"){
+    const mes = document.getElementById("filtroMes").value.padStart(2,"0");
+    const anio = document.getElementById("filtroAnio").value;
+    const filas = historico.filter(r => (r.FechaReposicion||"").slice(0,4)===anio && (r.FechaReposicion||"").slice(5,7)===mes);
+    return { filas, etiqueta: `${MESES[Number(mes)-1]} ${anio}` };
+  }
+  // anio
+  const anio = document.getElementById("filtroAnio").value;
+  const filas = historico.filter(r => (r.FechaReposicion||"").slice(0,4)===anio);
+  return { filas, etiqueta: `Año ${anio}` };
+}
+
+function generarInforme(){
+  if (!historico || !historico.length){
+    toast("No hay datos cargados todavía.");
+    return;
+  }
+  const { filas, etiqueta } = filtrarHistorico();
+  document.getElementById("reporteWrap").style.display = filas.length ? "" : "none";
+  document.getElementById("btnImprimirInforme").disabled = !filas.length;
+
+  if (!filas.length){
+    document.getElementById("informeStatus").textContent = "No hay registros para ese periodo.";
+    return;
+  }
+  document.getElementById("informeStatus").textContent = "";
+
+  document.getElementById("reportePeriodo").textContent = etiqueta;
+  document.getElementById("reporteFechaGen").textContent = "Generado: " + fmtDate(new Date());
+
+  // Resumen por punto
+  const porPunto = {};
+  filas.forEach(r=>{
+    const k = r.Punto;
+    if (!porPunto[k]) porPunto[k] = { punto:k, contrato:r.Contrato, responsable:r.Responsable, semanas:0, totalGas:0, valor:0 };
+    porPunto[k].semanas += 1;
+    porPunto[k].totalGas += Number(r.TotalGas)||0;
+    porPunto[k].valor += Number(r.Valor)||0;
+  });
+  const filasResumen = Object.values(porPunto).sort((a,b)=>a.punto.localeCompare(b.punto));
+
+  document.getElementById("tablaResumen").innerHTML = `
+    <thead><tr><th>Punto</th><th>Contrato</th><th>Responsable</th><th class="num">N° semanas</th><th class="num">Total tanques</th><th class="num">Valor transferido</th></tr></thead>
+    <tbody>
+      ${filasResumen.map(p=>`<tr><td>${p.punto}</td><td>${p.contrato||""}</td><td>${p.responsable||""}</td><td class="num">${p.semanas}</td><td class="num">${p.totalGas}</td><td class="num">${money(p.valor)}</td></tr>`).join("")}
+    </tbody>`;
+
+  // Detalle
+  const filasOrdenadas = [...filas].sort((a,b)=> (b.FechaReposicion||"").localeCompare(a.FechaReposicion||"") || a.Punto.localeCompare(b.Punto));
+  document.getElementById("tablaDetalle").innerHTML = `
+    <thead><tr><th>Punto</th><th>Fecha reposición</th><th class="num">Tanques</th><th class="num">Servicios</th><th class="num">Ratio</th><th class="num">Valor</th></tr></thead>
+    <tbody>
+      ${filasOrdenadas.map(r=>`<tr><td>${r.Punto}</td><td>${r.FechaReposicion}</td><td class="num">${r.TotalGas}</td><td class="num">${r.Servicios}</td><td class="num">${Number(r.Ratio).toFixed(1)}%</td><td class="num">${money(r.Valor)}</td></tr>`).join("")}
+    </tbody>`;
+
+  const totalGeneral = filas.reduce((s,r)=> s + (Number(r.Valor)||0), 0);
+  document.getElementById("reporteTotalGeneral").textContent = `Total general: ${money(totalGeneral)}`;
+}
+
+
+// =============================================================================
 // Eventos globales
 // =============================================================================
+document.getElementById("tabBtnRegistro").addEventListener("click", ()=>cambiarPantalla("registro"));
+document.getElementById("tabBtnInformes").addEventListener("click", ()=>cambiarPantalla("informes"));
+document.getElementById("filtroTipo").addEventListener("change", actualizarVisibilidadFiltros);
+document.getElementById("btnGenerarInforme").addEventListener("click", generarInforme);
+document.getElementById("btnImprimirInforme").addEventListener("click", ()=> window.print());
+
 document.getElementById("puntoCod").addEventListener("change", e=>{
   state.puntoCod = e.target.value; state.saved = false; renderChips(); renderResults();
 });
