@@ -174,7 +174,7 @@
       <div class="section-label">Ingresar</div>
       <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px;">Ingresa tu código de acceso para continuar.</p>
       <label class="field" style="margin-bottom:14px;">Código de acceso
-        <input type="text" id="loginCodigo" placeholder="Ej. R1-2026" style="text-transform:uppercase;" />
+        <input type="text" id="loginCodigo" placeholder="Ingrese su código" style="text-transform:uppercase;" />
       </label>
       <div id="loginError" class="errmsg"></div>
       <button class="primary" id="btnLogin" style="width:100%;justify-content:center;">Ingresar</button>
@@ -269,7 +269,8 @@
 
       <div style="margin-bottom:18px;">
         <div class="section-label">Evidencia fotográfica (recibos y comprobantes)</div>
-        <label class="upload">
+        <div id="fotosBloqueadas" class="alert bad" style="display:none;">⚠️ <div>Ingresa primero los <strong>servicios atendidos en la semana</strong> para poder subir fotos.</div></div>
+        <label class="upload" id="uploadLabel">
           📎 Subir fotos (máx. 6)
           <input type="file" id="fileInput" accept="image/*" multiple style="display:none;" />
         </label>
@@ -579,6 +580,14 @@ function renderResults(){
   document.getElementById("btnExcel").title = !state.saved ? "Guarda el registro primero" : (d.bloqueado ? "Ratio excede el límite" : "Descargar Excel");
   document.getElementById("btnPdf").disabled = d.bloqueado || !state.saved;
   document.getElementById("btnPdf").title = !state.saved ? "Guarda el registro primero" : (d.bloqueado ? "Ratio excede el límite" : "Ver / imprimir PDF");
+
+  // Sin servicios ingresados no se puede calcular el ratio, así que tampoco se
+  // permite adjuntar fotos todavía (mismo criterio que bloquea Excel/PDF).
+  const serviciosFaltan = d.serviciosNum <= 0;
+  document.getElementById("fotosBloqueadas").style.display = serviciosFaltan ? "flex" : "none";
+  document.getElementById("uploadLabel").style.opacity = serviciosFaltan ? 0.45 : 1;
+  document.getElementById("uploadLabel").style.pointerEvents = serviciosFaltan ? "none" : "auto";
+  document.getElementById("fileInput").disabled = serviciosFaltan;
 }
 
 function renderThumbs(){
@@ -1846,6 +1855,11 @@ document.getElementById("servicios").addEventListener("input", e=>{
 document.getElementById("fileInput").addEventListener("change", async e=>{
   const files = Array.from(e.target.files||[]);
   if (!files.length) return;
+  if ((Number(state.servicios)||0) <= 0){
+    toast("Ingresa primero los servicios de la semana.");
+    e.target.value = "";
+    return;
+  }
   if (state.imagenes.length + files.length > 6){
     toast("Máximo 6 imágenes por registro.");
     e.target.value = "";
