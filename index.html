@@ -230,7 +230,7 @@
     ⚠️ Falta configurar la URL del backend (Google Apps Script). Edita <code>CONFIG.API_URL</code> en el archivo <code>index.html</code>.
   </div>
 
-  <div id="screenRegistro">
+  <div id="screenRegistro" style="display:none;">
   <div class="grid">
     <!-- FORM -->
     <div class="card">
@@ -1886,6 +1886,10 @@ cargarSesionGuardada();
 if (session && session.codigo){
   iniciarApp();
 } else {
+  document.getElementById("screenRegistro").style.display = "none";
+  document.getElementById("screenInformes").style.display = "none";
+  document.getElementById("screenUsuarios").style.display = "none";
+  document.getElementById("tabsNav").style.display = "none";
   document.getElementById("screenLogin").style.display = "";
 }
 </script>
