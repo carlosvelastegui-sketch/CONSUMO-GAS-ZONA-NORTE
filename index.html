@@ -156,6 +156,22 @@
   .recibo-evidencia-title{font-weight:800;font-size:16px;margin:10px 0 14px;}
   .recibo-fotos{display:flex;flex-wrap:wrap;gap:16px;}
   .recibo-fotos img{width:250px;height:185px;object-fit:cover;border:1px solid #999;border-radius:4px;}
+
+  .cs-table{width:75%;margin:0 auto;border-collapse:collapse;table-layout:fixed;font-family:Calibri,Arial,sans-serif;}
+  .cs-table td{padding:4px 6px;font-size:11px;vertical-align:middle;overflow-wrap:break-word;}
+  .cs-bordered{border:1px solid #000;}
+  .cs-nb{border:none;}
+  .cs-spacer td{height:14px;border:none;}
+  .cs-spacer-sm td{height:6px;border:none;}
+  .cs-title{font-weight:800;font-size:15px;padding:6px 0 2px;}
+  .cs-title-sub{font-weight:800;font-size:15px;padding:2px 0 6px;}
+  .cs-lbl{font-weight:700;white-space:nowrap;font-size:11px;}
+  .cs-lbl2{font-weight:700;font-size:10px;}
+  .cs-val2{font-size:10.5px;}
+  .cs-th{font-weight:700;font-size:9.5px;text-align:center;}
+  .cs-center{text-align:center;}
+  .cs-bold{font-weight:700;}
+  .cs-obs{vertical-align:top;font-weight:700;font-size:10.5px;}
 </style>
 </head>
 <body>
@@ -1180,8 +1196,88 @@ function construirHtmlRecibo(r, imagenesInline){
       <div class="recibo-evidencia-title">EVIDENCIA FOTOGRÁFICA — ${r.contrato}</div>
       <div class="recibo-fotos">${fotosHtml}</div>
     </div>` : ""}
+    <div class="recibo-page-break"></div>
+    ${construirHtmlConsumo(r)}
   `;
 }
+
+function construirHtmlConsumo(r){
+  const fi = new Date(r.fechaInicio+"T00:00:00");
+  const fr = new Date(r.fechaReposicion+"T00:00:00");
+  const dias = r.dias || [0,0,0,0,0,0,0];
+  const servicios = Number(r.servicios) || 0;
+  const ratioPct = r.ratio !== undefined ? Number(r.ratio) : (servicios>0 ? (r.totalGas*15/servicios)*100 : 0);
+  const kg = r.totalGas * 15;
+
+  const cols = [8.98,14.92,17.05,14.92,8.98,11.72,11.72,11.72];
+  const colgroup = `<colgroup>${cols.map(w=>`<col style="width:${w}%;">`).join("")}</colgroup>`;
+
+  const filasDias = DIAS_LABELS.map((_,i)=>{
+    const dd = new Date(fi); dd.setDate(dd.getDate()+i);
+    let extra = "";
+    if (i===0) extra = `<td colspan="2" class="cs-bordered cs-lbl2">COSTO TOTAL</td><td class="cs-bordered cs-val2">${money(r.valor)}</td>`;
+    else if (i===1) extra = `<td colspan="2" class="cs-bordered cs-lbl2"># SERVICIOS</td><td class="cs-bordered cs-val2">${servicios}</td>`;
+    else if (i===2) extra = `<td colspan="2" class="cs-bordered cs-lbl2">KG</td><td class="cs-bordered cs-val2">${kg}</td>`;
+    else if (i===3) extra = `<td colspan="2" class="cs-bordered cs-lbl2 cs-bold">% CONSUMO</td><td class="cs-bordered cs-val2 cs-bold">${ratioPct.toFixed(1)}%</td>`;
+    else extra = `<td class="cs-nb"></td><td class="cs-nb"></td><td class="cs-nb"></td>`;
+    return `<tr>
+      <td class="cs-nb"></td>
+      <td class="cs-bordered cs-center">${fmtDateShort(dd)}</td>
+      <td class="cs-bordered cs-center">${dias[i]||0}</td>
+      <td class="cs-bordered"></td>
+      <td class="cs-nb"></td>
+      ${extra}
+    </tr>`;
+  }).join("");
+
+  return `
+    <div class="recibo-page">
+      <table class="cs-table">
+        ${colgroup}
+        <tr><td></td><td></td><td colspan="2" class="cs-title">CONSUMO DE GAS</td><td colspan="4"></td></tr>
+        <tr><td></td><td></td><td colspan="2" class="cs-title-sub">${r.contrato}</td><td colspan="4"></td></tr>
+        <tr class="cs-spacer"><td colspan="8"></td></tr>
+
+        <tr><td></td><td class="cs-lbl">Supervisor:</td><td colspan="2">${r.responsable}</td><td colspan="4"></td></tr>
+        <tr><td></td><td class="cs-lbl">Fecha reporte:</td><td colspan="2">${fmtDateShort(fr)}</td><td colspan="4"></td></tr>
+        <tr><td></td><td class="cs-lbl">PERIODO DE CONSUMO:</td><td colspan="2" class="cs-bold">${fmtDDMM(r.fechaInicio)} al ${fmtDDMM(r.fechaFin)}</td><td colspan="4"></td></tr>
+        <tr class="cs-spacer-sm"><td colspan="8"></td></tr>
+
+        <tr>
+          <td class="cs-nb"></td>
+          <td class="cs-bordered cs-th">FECHA</td>
+          <td class="cs-bordered cs-th">GAS DOMESTICO (15 KG)</td>
+          <td class="cs-bordered cs-th"># FACTURA/RECIBO</td>
+          <td class="cs-nb"></td>
+          <td colspan="2" class="cs-bordered cs-th">COSTO UNITARIO</td>
+          <td class="cs-bordered cs-val2">${money(PRECIO_TANQUE)}</td>
+        </tr>
+        ${filasDias}
+        <tr class="cs-spacer-sm"><td colspan="8"></td></tr>
+
+        <tr><td></td><td class="cs-lbl cs-bold">TOTAL CONSUMO</td><td class="cs-bordered cs-center cs-bold">${r.totalGas}</td><td colspan="5"></td></tr>
+        <tr class="cs-spacer"><td colspan="8"></td></tr>
+
+        <tr><td></td><td colspan="3" rowspan="3" class="cs-bordered cs-obs">OBSERVACIONES:&nbsp;</td><td colspan="4"></td></tr>
+        <tr><td></td><td colspan="4"></td></tr>
+        <tr><td></td><td colspan="4"></td></tr>
+        <tr class="cs-spacer"><td colspan="8"></td></tr>
+
+        <tr>
+          <td></td>
+          <td class="cs-lbl">FIRMA SUPERVISOR:</td>
+          <td class="cs-bordered">${r.responsable}</td>
+          <td></td>
+          <td class="cs-lbl">FIRMA JEFE OPERATIVO:</td>
+          <td colspan="2"></td>
+          <td class="cs-bordered">${JEFE_OPERATIVO}</td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
+function fmtDateShort(d){ return d.toLocaleDateString("es-EC",{day:"2-digit",month:"2-digit",year:"2-digit"}); }
 
 function mostrarEImprimirRecibo(r, imagenesInline){
   document.getElementById("pdfReciboArea").innerHTML = construirHtmlRecibo(r, imagenesInline);
@@ -1204,7 +1300,7 @@ async function imprimirPdfDesdeEstado(){
   const record = {
     punto: state.puntoCod, contrato: p.contrato, responsable: p.responsable, cedula: p.cedula, valorFondo: p.valorFondo,
     fechaReposicion: state.fechaReposicion, fechaInicio: toISODate(d.fechaInicio), fechaFin: toISODate(d.fechaFin),
-    totalGas: d.totalGas, valor: d.valor,
+    dias: state.dias.map(v=>Number(v)||0), totalGas: d.totalGas, servicios: d.serviciosNum, ratio: d.ratioPct, valor: d.valor,
   };
   mostrarEImprimirRecibo(record, state.imagenes);
 }
@@ -1213,7 +1309,8 @@ async function imprimirPdfDesdeRegistro(r, btn){
   const record = {
     punto: r.Punto, contrato: r.Contrato, responsable: r.Responsable, cedula: r.Cedula, valorFondo: (puntosEfectivos.find(p=>p.codigo===r.Punto)||{}).valorFondo || 0,
     fechaReposicion: r.FechaReposicion, fechaInicio: r.FechaInicio, fechaFin: r.FechaFin,
-    totalGas: Number(r.TotalGas), valor: Number(r.Valor),
+    dias: [r.Dia1,r.Dia2,r.Dia3,r.Dia4,r.Dia5,r.Dia6,r.Dia7].map(v=>Number(v)||0),
+    totalGas: Number(r.TotalGas), servicios: Number(r.Servicios), ratio: Number(r.Ratio), valor: Number(r.Valor),
   };
   const prevHtml = btn ? btn.innerHTML : null;
   if (btn){ btn.disabled = true; btn.textContent = "Trayendo fotos..."; }
