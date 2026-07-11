@@ -510,9 +510,13 @@ function aplicarPerfilesConocidos(usuarios){
 }
 
 async function cargarPuntosBase(){
-  const fetched = await fetchPuntosJSONP();
-  if (fetched && fetched.length){
-    puntosBase = fetched.map(p => ({
+  const res = await fetchPuntosJSONP();
+  if (res.error){
+    console.error("No se pudo cargar puntos, se usan los valores conocidos localmente:", res.error);
+    return;
+  }
+  if (res.puntos && res.puntos.length){
+    puntosBase = res.puntos.map(p => ({
       codigo: p.Codigo, contrato: p.Contrato, valorFondo: Number(p.ValorFondo) || 0,
       responsable: "", cedula: "",
     }));
@@ -1605,8 +1609,12 @@ function fetchUsuariosJSONP(){
     const cbName = "cbu_" + Date.now() + "_" + Math.floor(Math.random()*10000);
     const script = document.createElement("script");
     const cleanup = ()=>{ delete window[cbName]; script.remove(); };
-    window[cbName] = function(data){ resolve((data && data.usuarios) ? data.usuarios : []); cleanup(); };
-    script.onerror = ()=>{ resolve([]); cleanup(); };
+    window[cbName] = function(data){
+      if (data && data.ok === false) { resolve({ error: data.error || "Error desconocido" }); }
+      else { resolve({ usuarios: (data && data.usuarios) ? data.usuarios : [] }); }
+      cleanup();
+    };
+    script.onerror = ()=>{ resolve({ error: "No se pudo contactar al servidor." }); cleanup(); };
     script.src = `${CONFIG.API_URL}?action=usuarios&codigo=${encodeURIComponent(session?session.codigo:"")}&callback=${cbName}&_=${Date.now()}`;
     document.body.appendChild(script);
   });
@@ -1617,8 +1625,12 @@ function fetchPuntosJSONP(){
     const cbName = "cbp_" + Date.now() + "_" + Math.floor(Math.random()*10000);
     const script = document.createElement("script");
     const cleanup = ()=>{ delete window[cbName]; script.remove(); };
-    window[cbName] = function(data){ resolve((data && data.puntos) ? data.puntos : []); cleanup(); };
-    script.onerror = ()=>{ resolve([]); cleanup(); };
+    window[cbName] = function(data){
+      if (data && data.ok === false) { resolve({ error: data.error || "Error desconocido" }); }
+      else { resolve({ puntos: (data && data.puntos) ? data.puntos : [] }); }
+      cleanup();
+    };
+    script.onerror = ()=>{ resolve({ error: "No se pudo contactar al servidor." }); cleanup(); };
     script.src = `${CONFIG.API_URL}?action=puntos&codigo=${encodeURIComponent(session?session.codigo:"")}&callback=${cbName}&_=${Date.now()}`;
     document.body.appendChild(script);
   });
@@ -1828,7 +1840,14 @@ async function iniciarApp(){
   }
 
   await cargarPuntosBase();
-  usuariosConocidos = await fetchUsuariosJSONP();
+  const resUsuarios = await fetchUsuariosJSONP();
+  if (resUsuarios.error) {
+    console.error("No se pudo cargar usuarios:", resUsuarios.error);
+    toast("No se pudieron cargar los perfiles: " + resUsuarios.error);
+    usuariosConocidos = [];
+  } else {
+    usuariosConocidos = resUsuarios.usuarios;
+  }
   aplicarPerfilesConocidos(usuariosConocidos);
   // Asegura que el propio perfil recién confirmado quede reflejado de inmediato,
   // aunque el backend todavía no haya terminado de guardar la fila.
@@ -1873,7 +1892,12 @@ function enviarPostBackend(fields){
 
 async function cargarYRenderUsuarios(){
   document.getElementById("usuariosList").innerHTML = `<div style="font-size:12.5px;color:var(--faint);">Cargando…</div>`;
-  usuariosConocidos = await fetchUsuariosJSONP();
+  const res = await fetchUsuariosJSONP();
+  if (res.error){
+    document.getElementById("usuariosList").innerHTML = `<div class="errmsg">⚠️ No se pudo cargar la lista: ${res.error}</div>`;
+    return;
+  }
+  usuariosConocidos = res.usuarios;
   renderUsuariosList();
 }
 
@@ -1993,8 +2017,12 @@ let puntosParaAdmin = [];
 
 async function cargarYRenderPuntos(){
   document.getElementById("puntosList").innerHTML = `<div style="font-size:12.5px;color:var(--faint);">Cargando…</div>`;
-  const fetched = await fetchPuntosJSONP();
-  puntosParaAdmin = fetched;
+  const res = await fetchPuntosJSONP();
+  if (res.error){
+    document.getElementById("puntosList").innerHTML = `<div class="errmsg">⚠️ No se pudo cargar la lista: ${res.error}</div>`;
+    return;
+  }
+  puntosParaAdmin = res.puntos;
   renderPuntosList();
 }
 
