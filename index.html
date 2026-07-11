@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Control Semanal de Consumo de Gas — Hanaska</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 <style>
   :root{
     --navy:#002060; --navy-ink:#1B2431; --muted:#5B6478; --faint:#8A93A6;
@@ -91,6 +92,9 @@
   .reporte-sub{font-size:12.5px;color:var(--muted);margin-top:3px;}
   .reporte-fecha{font-size:11px;color:var(--faint);}
   .reporte-total{margin-top:14px;text-align:right;font-size:14px;font-weight:800;color:var(--navy);}
+  .chartsrow{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0;}
+  .chartbox{background:var(--soft);border-radius:10px;padding:12px;height:240px;}
+  @media (max-width:700px){.chartsrow{grid-template-columns:1fr;}}
 
   @media print{
     body{background:#fff;}
@@ -98,8 +102,38 @@
     #screenRegistro{display:none !important;}
     .card{box-shadow:none;border:none;padding:0;}
     #reporteWrap{display:block !important;}
-    @page{ size:landscape; margin:14mm; }
+    @page{ size:landscape; margin:12mm; }
   }
+
+  #pdfReciboArea{display:none;}
+  body.printing-recibo #screenRegistro,
+  body.printing-recibo #screenInformes,
+  body.printing-recibo .header,
+  body.printing-recibo .tabs{display:none !important;}
+  body.printing-recibo #pdfReciboArea{display:block !important;}
+
+  .recibo-page{padding:10px 4px;}
+  .recibo-page-break{page-break-before:always;break-before:page;}
+  .recibo-banner-title{text-align:center;font-weight:800;font-size:22px;color:#1B2431;}
+  .recibo-banner-black{background:#000;color:#fff;text-align:center;font-style:italic;font-size:19px;padding:7px;margin:6px 0;}
+  .recibo-banner-sub{text-align:center;font-size:14px;margin-bottom:16px;}
+  .recibo-info{width:100%;border-collapse:collapse;margin-bottom:10px;}
+  .recibo-info td{padding:5px 10px;font-size:12.5px;}
+  .recibo-info td.lbl{font-weight:700;white-space:nowrap;}
+  .recibo-info td.valorfondo{background:#E2EFDA;color:#0070C0;font-weight:700;}
+  .recibo-tabla{width:100%;border-collapse:collapse;margin:12px 0;}
+  .recibo-tabla th, .recibo-tabla td{border:1px solid #000;padding:6px 9px;font-size:11.5px;}
+  .recibo-tabla th{background:#fff;font-weight:700;}
+  .recibo-tabla td.gris{background:#BFBFBF;font-weight:700;font-style:italic;text-align:center;}
+  .recibo-totales{width:60%;margin-left:auto;border-collapse:collapse;margin-top:12px;}
+  .recibo-totales td{border:1px solid #000;padding:7px 10px;font-size:12.5px;}
+  .recibo-totales td.num{text-align:right;font-weight:700;}
+  .recibo-firma{width:100%;border-collapse:collapse;margin-top:20px;}
+  .recibo-firma td{border:1px solid #000;padding:16px 10px;font-style:italic;font-size:12.5px;vertical-align:top;}
+  .recibo-firma .firma-nombre{color:#0070C0;}
+  .recibo-evidencia-title{font-weight:800;font-size:16px;margin:10px 0 14px;}
+  .recibo-fotos{display:flex;flex-wrap:wrap;gap:16px;}
+  .recibo-fotos img{width:250px;height:185px;object-fit:cover;border:1px solid #999;border-radius:4px;}
 </style>
 </head>
 <body>
@@ -173,6 +207,7 @@
       <div class="btnrow">
         <button class="primary" id="btnGuardar">💾 <span id="btnGuardarLabel">Guardar registro</span></button>
         <button class="secondary" id="btnExcel">⬇️ Generar Excel (CCHH + Consumo)</button>
+        <button class="secondary" id="btnPdf">🖨️ Ver / Imprimir PDF</button>
       </div>
     </div>
 
@@ -229,6 +264,11 @@
         <div class="section-label" style="margin-top:18px;">Resumen por punto</div>
         <table class="reptable" id="tablaResumen"></table>
 
+        <div class="chartsrow" id="chartsRow">
+          <div class="chartbox"><canvas id="chartValor"></canvas></div>
+          <div class="chartbox"><canvas id="chartTanques"></canvas></div>
+        </div>
+
         <div class="section-label" style="margin-top:18px;">Detalle de registros</div>
         <table class="reptable" id="tablaDetalle"></table>
 
@@ -240,6 +280,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="pdfReciboArea"></div>
 <iframe name="hidden_iframe" style="display:none;"></iframe>
 <form id="postForm" method="POST" target="hidden_iframe" style="display:none;"></form>
 
@@ -387,6 +428,8 @@ function renderResults(){
 
   document.getElementById("btnExcel").disabled = d.bloqueado || !state.saved;
   document.getElementById("btnExcel").title = !state.saved ? "Guarda el registro primero" : (d.bloqueado ? "Ratio excede el límite" : "Descargar Excel");
+  document.getElementById("btnPdf").disabled = d.bloqueado || !state.saved;
+  document.getElementById("btnPdf").title = !state.saved ? "Guarda el registro primero" : (d.bloqueado ? "Ratio excede el límite" : "Ver / imprimir PDF");
 }
 
 function renderThumbs(){
@@ -439,6 +482,7 @@ function renderHistory(){
         <div class="hist-bottom">
           <div style="font-size:12px;"><strong>${money(r.Valor)}</strong> · ${r.TotalGas} tanques</div>
           <button class="tinybtn" data-dl="${r.Punto}|${r.FechaReposicion}" ${bloq?"disabled":""}>⬇️ Excel</button>
+          <button class="tinybtn" data-pdf="${r.Punto}|${r.FechaReposicion}" ${bloq?"disabled":""}>🖨️ PDF</button>
         </div>
         ${thumbsHtml}
       </div>
@@ -449,6 +493,13 @@ function renderHistory(){
       const [cod, fecha] = btn.dataset.dl.split("|");
       const rec = state.history.find(r=>r.Punto===cod && r.FechaReposicion===fecha);
       if (rec) descargarExcelDesdeRegistro(rec, btn);
+    });
+  });
+  document.querySelectorAll("[data-pdf]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const [cod, fecha] = btn.dataset.pdf.split("|");
+      const rec = state.history.find(r=>r.Punto===cod && r.FechaReposicion===fecha);
+      if (rec) imprimirPdfDesdeRegistro(rec, btn);
     });
   });
 }
@@ -883,12 +934,128 @@ async function descargarExcelDesdeRegistro(r, btn){
   }
 }
 
+// =============================================================================
+// Recibo en PDF (imprimible) — mismo contenido que la pestaña CCHH, página 1
+// texto y página 2 fotos, usando la función nativa de impresión del navegador.
+// =============================================================================
+function construirHtmlRecibo(r, imagenesInline){
+  const fechaRepo = new Date(r.fechaReposicion+"T00:00:00");
+  const detalle = `Pago por compra ${r.totalGas} tanques de gas del ${fmtDMY(r.fechaInicio)} al ${fmtDMY(r.fechaFin)}`;
+  const disponible = (Number(r.valorFondo)||0) - (Number(r.valor)||0);
+
+  const fotosHtml = (imagenesInline||[]).map(img=>`<img src="${img.dataUrl}" alt="evidencia"/>`).join("");
+
+  return `
+    <div class="recibo-page">
+      <div class="recibo-banner-title">GRUPO&nbsp;&nbsp;HANASKA</div>
+      <div class="recibo-banner-black">TECFOOD SERVICIOS DE ALIMENTACIÓN S.A.</div>
+      <div class="recibo-banner-sub">REPOSICIÓN FONDO DE CAJA CHICA - ANEXO 2</div>
+
+      <table class="recibo-info">
+        <tr>
+          <td class="lbl">RESPONSABLE:</td><td class="val">${r.responsable}</td>
+          <td class="lbl">Cédula Ciudadanía:</td><td class="val">${r.cedula}</td>
+          <td class="lbl">CONTRATO:</td><td class="val">${r.contrato}</td>
+        </tr>
+        <tr>
+          <td class="lbl">FECHA REPOSICION:</td><td class="val">${fmtDate(fechaRepo)}</td>
+          <td class="lbl">CIUDAD:</td><td class="val">${CIUDAD}</td>
+          <td class="lbl">Valor Fondo:</td><td class="val valorfondo">${money(r.valorFondo)}</td>
+        </tr>
+      </table>
+
+      <table class="recibo-tabla">
+        <thead><tr><th>FECHA</th><th>RUC</th><th>PROVEEDOR</th><th>DETALLE</th><th>CENTRO DE COSTO/CONTRATO</th><th>TIPO DOCUM</th><th>VALOR</th><th>TOTAL ACUMULADO</th></tr></thead>
+        <tbody>
+          <tr><td colspan="8" class="gris">DOCUMENTOS&nbsp;&nbsp;NO&nbsp;&nbsp;VÁLIDOS&nbsp;&nbsp;PARA&nbsp;&nbsp;LA&nbsp;&nbsp;ADMINISTRACION&nbsp;&nbsp;TRIBUTARIA</td></tr>
+          <tr>
+            <td>${fmtDate(fechaRepo)}</td><td>${PROVEEDOR.ruc}</td><td>${PROVEEDOR.nombre}</td><td>${detalle}</td>
+            <td>${r.contrato}</td><td>recibo</td><td>${money(r.valor)}</td><td>${money(r.valor)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table class="recibo-totales">
+        <tr><td>TOTAL</td><td class="num">${money(r.valor)}</td></tr>
+        <tr><td>TOTAL VALOR A REEMBOLSAR</td><td class="num">${money(r.valor)}</td></tr>
+        <tr><td>FONDO CAJA CHICA DISPONIBLE</td><td class="num">${money(disponible)}</td></tr>
+      </table>
+
+      <table class="recibo-firma">
+        <tr>
+          <td style="width:35%;">Responsable: <span class="firma-nombre">${r.responsable}</span> &nbsp;&nbsp;(f)</td>
+          <td style="width:30%;"></td>
+          <td style="width:35%;">Autorizado:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(f)<br><br>Nombre:</td>
+        </tr>
+      </table>
+    </div>
+    ${fotosHtml ? `
+    <div class="recibo-page-break"></div>
+    <div class="recibo-page">
+      <div class="recibo-evidencia-title">EVIDENCIA FOTOGRÁFICA — ${r.contrato}</div>
+      <div class="recibo-fotos">${fotosHtml}</div>
+    </div>` : ""}
+  `;
+}
+
+function mostrarEImprimirRecibo(r, imagenesInline){
+  document.getElementById("pdfReciboArea").innerHTML = construirHtmlRecibo(r, imagenesInline);
+  document.body.classList.add("printing-recibo");
+  const limpiar = ()=>{
+    document.body.classList.remove("printing-recibo");
+    window.removeEventListener("afterprint", limpiar);
+  };
+  window.addEventListener("afterprint", limpiar);
+  setTimeout(()=> window.print(), 60); // pequeña espera para que el navegador termine de pintar las imágenes
+}
+
+async function imprimirPdfDesdeEstado(){
+  if (!state.saved){
+    toast("Guarda el registro primero.");
+    return;
+  }
+  const d = derived();
+  const p = punto();
+  const record = {
+    punto: state.puntoCod, contrato: p.contrato, responsable: p.responsable, cedula: p.cedula, valorFondo: p.valorFondo,
+    fechaReposicion: state.fechaReposicion, fechaInicio: toISODate(d.fechaInicio), fechaFin: toISODate(d.fechaFin),
+    totalGas: d.totalGas, valor: d.valor,
+  };
+  mostrarEImprimirRecibo(record, state.imagenes);
+}
+
+async function imprimirPdfDesdeRegistro(r, btn){
+  const record = {
+    punto: r.Punto, contrato: r.Contrato, responsable: r.Responsable, cedula: r.Cedula, valorFondo: (PUNTOS.find(p=>p.codigo===r.Punto)||{}).valorFondo || 0,
+    fechaReposicion: r.FechaReposicion, fechaInicio: r.FechaInicio, fechaFin: r.FechaFin,
+    totalGas: Number(r.TotalGas), valor: Number(r.Valor),
+  };
+  const prevHtml = btn ? btn.innerHTML : null;
+  if (btn){ btn.disabled = true; btn.textContent = "Trayendo fotos..."; }
+  try {
+    const ids = r.Imagenes || [];
+    const imagenesInline = [];
+    for (const id of ids) {
+      const dataUrl = await fetchImagenBase64JSONP(id);
+      if (dataUrl) imagenesInline.push({ name: `evidencia_${imagenesInline.length+1}.jpg`, dataUrl });
+    }
+    mostrarEImprimirRecibo(record, imagenesInline);
+  } catch(e){
+    console.error("Error preparando PDF:", e);
+    alert("No se pudo preparar el PDF:\n\n" + e.message);
+  } finally {
+    if (btn){ btn.disabled = false; btn.innerHTML = prevHtml; }
+  }
+}
+
 
 // =============================================================================
 // HISTORIAL E INFORMES (filtro por semana / mes / año + impresión a PDF)
 // =============================================================================
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 let historico = null; // se carga la primera vez que se entra a la pestaña Informes
+let chartValorInstance = null;
+let chartTanquesInstance = null;
 
 function cambiarPantalla(nombre){
   document.getElementById("screenRegistro").style.display = nombre==="registro" ? "" : "none";
@@ -991,6 +1158,29 @@ function generarInforme(){
 
   const totalGeneral = filas.reduce((s,r)=> s + (Number(r.Valor)||0), 0);
   document.getElementById("reporteTotalGeneral").textContent = `Total general: ${money(totalGeneral)}`;
+
+  renderGraficos(filasResumen);
+}
+
+function renderGraficos(filasResumen){
+  if (typeof Chart === "undefined") return; // si no cargó la librería, se omiten los gráficos sin romper el informe
+
+  const labels = filasResumen.map(p=>p.punto);
+  const navy = "#002060", gold = "#C7A24A";
+
+  if (chartValorInstance) chartValorInstance.destroy();
+  chartValorInstance = new Chart(document.getElementById("chartValor"), {
+    type: "bar",
+    data: { labels, datasets: [{ label: "Valor transferido ($)", data: filasResumen.map(p=>Number(p.valor.toFixed(2))), backgroundColor: navy }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ title:{ display:true, text:"Valor transferido por punto" }, legend:{ display:false } } }
+  });
+
+  if (chartTanquesInstance) chartTanquesInstance.destroy();
+  chartTanquesInstance = new Chart(document.getElementById("chartTanques"), {
+    type: "bar",
+    data: { labels, datasets: [{ label: "Total tanques", data: filasResumen.map(p=>p.totalGas), backgroundColor: gold }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ title:{ display:true, text:"Tanques de gas por punto" }, legend:{ display:false } } }
+  });
 }
 
 
@@ -1036,6 +1226,7 @@ document.getElementById("fileInput").addEventListener("change", async e=>{
 });
 document.getElementById("btnGuardar").addEventListener("click", guardarRegistro);
 document.getElementById("btnExcel").addEventListener("click", generarExcelDesdeEstado);
+document.getElementById("btnPdf").addEventListener("click", imprimirPdfDesdeEstado);
 
 // =============================================================================
 // Init
