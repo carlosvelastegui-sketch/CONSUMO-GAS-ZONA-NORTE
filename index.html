@@ -286,14 +286,15 @@
       </div>
 
       <div style="margin-bottom:18px;">
-        <div class="section-label">Evidencia fotográfica (recibos y comprobantes)</div>
+        <div class="section-label">Evidencia fotográfica — depósito y recibo</div>
         <div id="fotosBloqueadas" class="alert bad" style="display:none;">⚠️ <div>Ingresa primero los <strong>servicios atendidos en la semana</strong> para poder subir fotos.</div></div>
         <label class="upload" id="uploadLabel">
-          📎 Subir fotos (máx. 6)
+          📎 Ingresar imagen depósito y recibo
           <input type="file" id="fileInput" accept="image/*" multiple style="display:none;" />
         </label>
         <div class="thumbs" id="thumbs"></div>
-        <div class="hint">Las imágenes se suben a Google Drive y quedan enlazadas al registro compartido con el equipo.</div>
+        <div id="fotosMinAviso" class="hint" style="display:none;color:#C0392B;font-weight:600;"></div>
+        <div class="hint">Sube la foto del <strong>depósito</strong> y la del <strong>recibo</strong> (mínimo 2 fotos, máx. 6). Se suben a Google Drive y quedan enlazadas al registro compartido con el equipo.</div>
       </div>
 
       <div id="errBox"></div>
@@ -473,6 +474,7 @@ const CIUDAD = "Cayambe";
 const PRECIO_TANQUE = 4.25;
 const FACTOR_RATIO = 15;
 const RATIO_LIMITE = 7;
+const MIN_FOTOS = 2; // mínimo de fotos (depósito + recibo) para poder generar Excel/PDF
 
 const PUNTOS = [
   { codigo: "R1", responsable: "Alex Villamarín", cedula: "0401174883", contrato: "ROSAPRIMA 1", valorFondo: 400, serviciosRef: 10433 },
@@ -636,10 +638,11 @@ function renderResults(){
     alertBox.innerHTML = "";
   }
 
-  document.getElementById("btnExcel").disabled = d.bloqueado || !state.saved;
-  document.getElementById("btnExcel").title = !state.saved ? "Guarda el registro primero" : (d.bloqueado ? "Ratio excede el límite" : "Descargar Excel");
-  document.getElementById("btnPdf").disabled = d.bloqueado || !state.saved;
-  document.getElementById("btnPdf").title = !state.saved ? "Guarda el registro primero" : (d.bloqueado ? "Ratio excede el límite" : "Ver / imprimir PDF");
+  const faltanFotos = state.imagenes.length < MIN_FOTOS;
+  document.getElementById("btnExcel").disabled = d.bloqueado || !state.saved || faltanFotos;
+  document.getElementById("btnExcel").title = !state.saved ? "Guarda el registro primero" : (d.bloqueado ? "Ratio excede el límite" : (faltanFotos ? `Sube al menos ${MIN_FOTOS} fotos (depósito y recibo)` : "Descargar Excel"));
+  document.getElementById("btnPdf").disabled = d.bloqueado || !state.saved || faltanFotos;
+  document.getElementById("btnPdf").title = !state.saved ? "Guarda el registro primero" : (d.bloqueado ? "Ratio excede el límite" : (faltanFotos ? `Sube al menos ${MIN_FOTOS} fotos (depósito y recibo)` : "Ver / imprimir PDF"));
 
   // Sin servicios ingresados no se puede calcular el ratio, así que tampoco se
   // permite adjuntar fotos todavía (mismo criterio que bloquea Excel/PDF).
@@ -648,6 +651,16 @@ function renderResults(){
   document.getElementById("uploadLabel").style.opacity = serviciosFaltan ? 0.45 : 1;
   document.getElementById("uploadLabel").style.pointerEvents = serviciosFaltan ? "none" : "auto";
   document.getElementById("fileInput").disabled = serviciosFaltan;
+
+  const avisoFotos = document.getElementById("fotosMinAviso");
+  if (avisoFotos){
+    if (!serviciosFaltan && faltanFotos){
+      avisoFotos.style.display = "block";
+      avisoFotos.textContent = `Faltan ${MIN_FOTOS - state.imagenes.length} foto(s): sube el depósito y el recibo para poder generar el Excel/PDF.`;
+    } else {
+      avisoFotos.style.display = "none";
+    }
+  }
 }
 
 function renderThumbs(){
@@ -701,6 +714,7 @@ function renderHistory(){
           <div style="font-size:12px;"><strong>${money(r.Valor)}</strong> · ${r.TotalGas} tanques</div>
           <button class="tinybtn" data-dl="${r.Punto}|${r.FechaReposicion}" ${bloq?"disabled":""}>⬇️ Excel</button>
           <button class="tinybtn" data-pdf="${r.Punto}|${r.FechaReposicion}" ${bloq?"disabled":""}>🖨️ PDF</button>
+          ${esAdmin() ? `<button class="tinybtn" data-delreg="${r.Punto}|${r.FechaReposicion}" style="color:var(--red);border-color:var(--red-line);">🗑️</button>` : ""}
         </div>
         ${thumbsHtml}
       </div>
@@ -720,6 +734,20 @@ function renderHistory(){
       if (rec) imprimirPdfDesdeRegistro(rec, btn);
     });
   });
+  document.querySelectorAll("[data-delreg]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const [cod, fecha] = btn.dataset.delreg.split("|");
+      eliminarRegistro(cod, fecha, btn);
+    });
+  });
+}
+
+async function eliminarRegistro(punto, fechaReposicion, btn){
+  if (!confirm(`¿Eliminar el registro de ${punto} (reposición ${fechaReposicion})? Esta acción no se puede deshacer.`)) return;
+  btn.disabled = true;
+  await enviarPostBackend({ accion:"eliminarRegistro", codigoSolicitante: session.codigo, punto, fechaReposicion });
+  toast("Registro eliminado.");
+  await cargarHistorial();
 }
 
 function renderAll(){
