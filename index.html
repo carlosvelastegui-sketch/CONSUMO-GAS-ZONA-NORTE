@@ -53,7 +53,7 @@
   .thumbs{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:10px;}
   @media (max-width:600px){.thumbs{grid-template-columns:repeat(3,1fr);}}
   .thumb{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1;}
-  .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .thumb img{width:100%;height:100%;object-fit:contain;background:#F0F2F5;display:block;}
   .thumb button{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.55);border:none;border-radius:50%;width:18px;height:18px;color:#fff;cursor:pointer;font-size:11px;line-height:1;}
   .hint{font-size:11px;color:var(--faint);margin-top:6px;}
   .errmsg{color:#C0392B;font-size:12.5px;margin-bottom:10px;}
@@ -155,7 +155,7 @@
 
   .recibo-evidencia-title{font-weight:800;font-size:16px;margin:10px 0 14px;}
   .recibo-fotos{display:flex;flex-wrap:wrap;gap:16px;}
-  .recibo-fotos img{width:250px;height:185px;object-fit:cover;border:1px solid #999;border-radius:4px;}
+  .recibo-fotos img{width:250px;height:185px;object-fit:contain;background:#F0F2F5;border:1px solid #999;border-radius:4px;}
 
   .cs-table{width:75%;margin:0 auto;border-collapse:collapse;table-layout:fixed;font-family:Calibri,Arial,sans-serif;}
   .cs-table td{padding:4px 6px;font-size:11px;vertical-align:middle;overflow-wrap:break-word;}
@@ -272,6 +272,24 @@
 
       <div class="chips" id="chips"></div>
 
+      <div id="formBloqueado" style="display:none;">
+        <div class="alert" style="background:#EAF7F0;border:1px solid #BCE6CD;color:#1E6B44;">
+          ✅ <div>Ya guardaste tu registro para esta semana. No se puede modificar — si necesitas corregir algo, contacta al administrador.</div>
+        </div>
+        <div class="results" style="margin-top:12px;">
+          <div class="res3">
+            <div class="res"><div class="l">Total gas</div><div class="v" id="bloqTotalGas">—</div></div>
+            <div class="res"><div class="l">Servicios</div><div class="v" id="bloqServicios">—</div></div>
+            <div class="res"><div class="l">Valor transferido</div><div class="v hi" id="bloqValor">—</div></div>
+          </div>
+        </div>
+        <div class="btnrow" style="margin-top:14px;">
+          <button class="secondary" id="btnExcelBloqueado">⬇️ Descargar Excel</button>
+          <button class="secondary" id="btnPdfBloqueado">🖨️ Ver / Imprimir PDF</button>
+        </div>
+      </div>
+
+      <div id="formEditable">
       <div class="periodo" id="periodo"></div>
 
       <div style="margin-bottom:16px;">
@@ -312,6 +330,7 @@
         <button class="primary" id="btnGuardar">💾 <span id="btnGuardarLabel">Guardar registro</span></button>
         <button class="secondary" id="btnExcel">⬇️ Generar Excel (CCHH + Consumo)</button>
         <button class="secondary" id="btnPdf">🖨️ Ver / Imprimir PDF</button>
+      </div>
       </div>
     </div>
 
@@ -739,7 +758,7 @@ function renderHistory(){
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
         ${imgIds.map(id => `
           <a href="${idADriveView(id)}" target="_blank" rel="noopener" style="display:block;width:44px;height:44px;border-radius:6px;overflow:hidden;border:1px solid var(--line);">
-            <img src="${idADriveThumb(id)}" alt="evidencia" style="width:100%;height:100%;object-fit:cover;display:block;" />
+            <img src="${idADriveThumb(id)}" alt="evidencia" style="width:100%;height:100%;object-fit:contain;background:#F0F2F5;display:block;" />
           </a>
         `).join("")}
       </div>` : "";
@@ -791,7 +810,7 @@ async function eliminarRegistro(punto, fechaReposicion, btn){
 }
 
 function renderAll(){
-  const pasos = [renderSelect, renderChips, renderDias, renderResults, renderThumbs, renderHistory];
+  const pasos = [renderSelect, renderChips, renderDias, renderResults, renderThumbs, renderHistory, actualizarBloqueoFormulario];
   pasos.forEach(fn => {
     try { fn(); }
     catch(e){ console.error(`Error en ${fn.name}:`, e); }
@@ -803,9 +822,66 @@ function renderAll(){
   } catch(e){ console.error("Error pintando el pie de página:", e); }
 }
 
+// Un supervisor que ya guardó su registro de esta semana (para el punto y
+// fecha actuales) no puede ver ni modificar lo ya ingresado — se le muestra
+// un resumen bloqueado en su lugar. El administrador nunca se bloquea.
+function actualizarBloqueoFormulario(){
+  const wrap = document.getElementById("formBloqueado");
+  const editable = document.getElementById("formEditable");
+  if (esAdmin() || !state.history){
+    wrap.style.display = "none";
+    editable.style.display = "";
+    return;
+  }
+  const existente = state.history.find(r => r.Punto === state.puntoCod && r.FechaReposicion === state.fechaReposicion);
+  if (existente){
+    wrap.style.display = "";
+    editable.style.display = "none";
+    document.getElementById("bloqTotalGas").textContent = `${existente.TotalGas} tanques`;
+    document.getElementById("bloqServicios").textContent = existente.Servicios;
+    document.getElementById("bloqValor").textContent = money(existente.Valor);
+    document.getElementById("btnExcelBloqueado").onclick = () => descargarExcelDesdeRegistro(existente, document.getElementById("btnExcelBloqueado"));
+    document.getElementById("btnPdfBloqueado").onclick = () => imprimirPdfDesdeRegistro(existente, document.getElementById("btnPdfBloqueado"));
+  } else {
+    wrap.style.display = "none";
+    editable.style.display = "";
+  }
+}
+
 // =============================================================================
 // Imágenes (compresión con canvas)
 // =============================================================================
+// Lee el ancho/alto real de un JPEG a partir de su base64, buscando el marcador
+// SOF dentro de los bytes. Sirve para las fotos que vienen de Drive (registros
+// antiguos), que no tienen el tamaño guardado como las recién comprimidas.
+function obtenerDimensionesJPEG(dataUrl){
+  try {
+    const base64 = String(dataUrl).split(",")[1] || "";
+    const binary = atob(base64);
+    let i = 2; // salta el marcador inicial FFD8
+    while (i < binary.length - 9){
+      if (binary.charCodeAt(i) !== 0xFF){ i++; continue; }
+      const marker = binary.charCodeAt(i+1);
+      if (marker >= 0xC0 && marker <= 0xC3){
+        const height = (binary.charCodeAt(i+5) << 8) | binary.charCodeAt(i+6);
+        const width = (binary.charCodeAt(i+7) << 8) | binary.charCodeAt(i+8);
+        return { width, height };
+      }
+      const length = (binary.charCodeAt(i+2) << 8) | binary.charCodeAt(i+3);
+      i += 2 + length;
+    }
+  } catch(e){ /* si algo falla, se usa el tamaño por defecto más abajo */ }
+  return null;
+}
+
+// Calcula ancho/alto que quepan dentro de una caja máxima SIN deformar la
+// imagen (conserva la proporción real, como "contain" en CSS).
+function ajustarDimensiones(w, h, maxW, maxH){
+  if (!w || !h) return { width: maxW, height: maxH };
+  const escala = Math.min(maxW / w, maxH / h);
+  return { width: Math.round(w * escala), height: Math.round(h * escala) };
+}
+
 function compressImage(file){
   return new Promise((resolve,reject)=>{
     const reader = new FileReader();
@@ -820,7 +896,7 @@ function compressImage(file){
         canvas.height = Math.round(img.height*scale);
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img,0,0,canvas.width,canvas.height);
-        resolve({ name: file.name, dataUrl: canvas.toDataURL("image/jpeg",0.72) });
+        resolve({ name: file.name, dataUrl: canvas.toDataURL("image/jpeg",0.72), width: canvas.width, height: canvas.height });
       };
       img.onerror = ()=>reject(new Error("Imagen inválida"));
       img.src = reader.result;
@@ -878,6 +954,7 @@ async function cargarHistorial(){
   const regs = await fetchHistorialJSONP();
   state.history = regs;
   renderHistory();
+  actualizarBloqueoFormulario();
   if (!regs.length) { /* puede ser normal (sin registros) o CONFIG.API_URL mal puesta */ }
 }
 
@@ -1081,7 +1158,9 @@ function construirHojaCCHH(wb, r, imagenesInline){
       if (!match) return;
       let ext = match[1].toLowerCase(); if (ext === "jpg") ext = "jpeg";
       const imgId = wb.addImage({ base64: img.dataUrl, extension: ext });
-      sh.addImage(imgId, { tl:{ col: col-1, row: row-1 }, ext:{ width:230, height:170 } });
+      const dim = (img.width && img.height) ? { width: img.width, height: img.height } : obtenerDimensionesJPEG(img.dataUrl);
+      const tam = ajustarDimensiones(dim && dim.width, dim && dim.height, 230, 170);
+      sh.addImage(imgId, { tl:{ col: col-1, row: row-1 }, ext: tam });
       col += 3;
       enFila++;
       if (enFila >= porFila){ enFila = 0; col = 2; row += 10; }
@@ -1858,11 +1937,15 @@ async function mostrarPantallaPerfil(){
     const opciones = puntosBase.map(p=>
       `<option value="${p.codigo}" ${p.codigo===session.punto?"selected":""}>${p.codigo} — ${p.contrato}</option>`
     );
-    // Si el punto asignado a la persona ya no existe en la lista, NUNCA lo
-    // reemplazamos en silencio por el primero de la lista (eso corrompía el
-    // dato) — lo dejamos visible y marcado, para que se note y se corrija.
+    // Dos casos, uno u otro (nunca ambos):
+    // 1) Tenía un punto asignado pero ya no existe en la lista -> se avisa, sin
+    //    reemplazarlo en silencio por el primero (eso corrompía el dato).
+    // 2) Nunca tuvo un punto asignado -> opción en blanco obligatoria, para que
+    //    el navegador NUNCA "elija por su cuenta" el primero de la lista.
     if (session.punto && !puntosBase.some(p=>p.codigo===session.punto)){
       opciones.unshift(`<option value="${session.punto}" selected>${session.punto} — ⚠️ no encontrado, avisa al administrador</option>`);
+    } else if (!session.punto){
+      opciones.unshift(`<option value="" selected>-- Selecciona tu punto --</option>`);
     }
     document.getElementById("perfilPunto").innerHTML = opciones.join("");
   }
@@ -2280,7 +2363,7 @@ document.getElementById("puntoCod").addEventListener("change", e=>{
 });
 document.getElementById("fechaReposicion").value = state.fechaReposicion;
 document.getElementById("fechaReposicion").addEventListener("change", e=>{
-  state.fechaReposicion = e.target.value; state.saved = false; renderDias(); renderResults();
+  state.fechaReposicion = e.target.value; state.saved = false; renderDias(); renderResults(); actualizarBloqueoFormulario();
 });
 document.getElementById("servicios").addEventListener("input", e=>{
   state.servicios = e.target.value.replace(/[^0-9]/g,"");
