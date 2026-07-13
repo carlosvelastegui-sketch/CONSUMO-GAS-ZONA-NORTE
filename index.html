@@ -25,7 +25,7 @@
   .card{background:var(--card);border-radius:16px;padding:22px;box-shadow:0 1px 3px rgba(20,30,60,.08);}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
   label.field{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:#3B4254;}
-  input, select{border:1.5px solid var(--line);border-radius:9px;padding:9px 10px;font-size:13.5px;font-family:inherit;color:var(--navy-ink);background:#fff;width:100%;}
+  input, select{border:1.5px solid var(--line);border-radius:9px;padding:9px 10px;font-size:13.5px;font-family:inherit;color:var(--navy-ink);background:#fff;width:100%;position:relative;z-index:5;}
   input:focus, select:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(0,32,96,.12);}
   .chips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;}
   @media (max-width:600px){.chips{grid-template-columns:repeat(2,1fr);}}
@@ -308,7 +308,7 @@
 
     <!-- HISTORIAL -->
     <div class="card">
-      <div class="hist-head">📋 Historial compartido</div>
+      <div class="hist-head" id="histHead">📋 Historial compartido</div>
       <div id="histStatus" style="font-size:12.5px;color:var(--faint);">Cargando registros…</div>
       <div class="hist-list" id="histList"></div>
     </div>
@@ -471,7 +471,7 @@ const CONFIG = {
 // =============================================================================
 const PROVEEDOR = { ruc: "1712741121", nombre: "Edwin Marcelo Cachipuendo Vargas" };
 const CIUDAD = "Cayambe";
-const PRECIO_TANQUE = 4.25;
+let PRECIO_TANQUE = 4.25; // editable por cualquier usuario logueado, se actualiza desde el backend al iniciar
 const FACTOR_RATIO = 15;
 const RATIO_LIMITE = 7;
 const MIN_FOTOS = 2; // mínimo de fotos (depósito + recibo) para poder generar Excel/PDF
@@ -523,6 +523,31 @@ async function cargarPuntosBase(){
       responsable: "", cedula: "",
     }));
   }
+}
+
+async function cargarConfigGeneral(){
+  const res = await fetchConfigGeneralJSONP();
+  if (res.error){
+    console.error("No se pudo cargar la configuración general, se usa el precio conocido localmente:", res.error);
+    return;
+  }
+  if (res.config && res.config.PrecioTanque){
+    PRECIO_TANQUE = Number(res.config.PrecioTanque) || PRECIO_TANQUE;
+  }
+}
+
+async function editarPrecioTanque(){
+  const nuevo = prompt(`Precio actual por tanque: ${money(PRECIO_TANQUE)}\n\nIngresa el nuevo precio (solo el número, ej. 4.50):`, PRECIO_TANQUE);
+  if (nuevo === null) return; // canceló
+  const valor = Number(String(nuevo).replace(",", "."));
+  if (!valor || valor <= 0){
+    toast("Ingresa un número válido mayor a 0.");
+    return;
+  }
+  await enviarPostBackend({ accion:"guardarConfig", codigoSolicitante: session.codigo, precioTanque: valor });
+  PRECIO_TANQUE = valor;
+  toast(`Precio por tanque actualizado a ${money(valor)} para todos.`);
+  renderAll();
 }
 
 
@@ -680,18 +705,21 @@ function renderThumbs(){
 function renderHistory(){
   const status = document.getElementById("histStatus");
   const list = document.getElementById("histList");
+  document.getElementById("histHead").textContent = esAdmin() ? "📋 Historial compartido" : "📋 Mi historial";
   if (state.history === null){
     status.textContent = "Cargando registros…";
     list.innerHTML = "";
     return;
   }
-  if (state.history.length === 0){
-    status.textContent = "Aún no hay registros guardados por el equipo.";
+  // Un supervisor solo ve los registros de su propio punto; el administrador ve todos.
+  const historyVisible = esAdmin() ? state.history : state.history.filter(r => r.Punto === session.punto);
+  if (historyVisible.length === 0){
+    status.textContent = esAdmin() ? "Aún no hay registros guardados por el equipo." : "Todavía no has guardado ningún registro esta semana.";
     list.innerHTML = "";
     return;
   }
   status.textContent = "";
-  list.innerHTML = state.history.map(r=>{
+  list.innerHTML = historyVisible.map(r=>{
     const bloq = Number(r.Ratio) >= RATIO_LIMITE;  // Ratio se guarda ya en porcentaje (ej. 5.89 = 5.89%)
     const p = puntosEfectivos.find(x=>x.codigo===r.Punto) || {};
     const imgIds = r.Imagenes || [];
@@ -752,8 +780,10 @@ async function eliminarRegistro(punto, fechaReposicion, btn){
 
 function renderAll(){
   renderSelect(); renderChips(); renderDias(); renderResults(); renderThumbs(); renderHistory();
-  document.getElementById("footnote").textContent =
-    `Umbral de bloqueo: ratio ≥ ${RATIO_LIMITE}% · Precio por tanque: ${money(PRECIO_TANQUE)} · Proveedor: ${PROVEEDOR.nombre} (RUC ${PROVEEDOR.ruc})`;
+  document.getElementById("footnote").innerHTML =
+    `Umbral de bloqueo: ratio ≥ ${RATIO_LIMITE}% · Precio por tanque: ${money(PRECIO_TANQUE)} <button id="btnEditarPrecio" style="background:none;border:none;color:var(--navy);font-size:11px;text-decoration:underline;cursor:pointer;padding:0;">✏️ editar</button> · Proveedor: ${PROVEEDOR.nombre} (RUC ${PROVEEDOR.ruc})`;
+  const btnP = document.getElementById("btnEditarPrecio");
+  if (btnP) btnP.addEventListener("click", editarPrecioTanque);
   document.getElementById("cfgwarn").style.display = CONFIG.API_URL.indexOf("PEGA_AQUI") === 0 ? "block" : "none";
 }
 
@@ -1665,6 +1695,22 @@ function fetchPuntosJSONP(){
   });
 }
 
+function fetchConfigGeneralJSONP(){
+  return new Promise((resolve)=>{
+    const cbName = "cbg_" + Date.now() + "_" + Math.floor(Math.random()*10000);
+    const script = document.createElement("script");
+    const cleanup = ()=>{ delete window[cbName]; script.remove(); };
+    window[cbName] = function(data){
+      if (data && data.ok === false) { resolve({ error: data.error || "Error desconocido" }); }
+      else { resolve({ config: (data && data.config) ? data.config : {} }); }
+      cleanup();
+    };
+    script.onerror = ()=>{ resolve({ error: "No se pudo contactar al servidor." }); cleanup(); };
+    script.src = `${CONFIG.API_URL}?action=config&codigo=${encodeURIComponent(session?session.codigo:"")}&callback=${cbName}&_=${Date.now()}`;
+    document.body.appendChild(script);
+  });
+}
+
 
 function guardarPerfilBackend(codigoOriginal){
   const form = document.getElementById("postForm");
@@ -1713,7 +1759,7 @@ async function intentarLogin(){
     primeraVez: !(u.Nombre || u.Apellido), // sin nombre guardado = todavía no confirmó su perfil nunca
   };
   perfilEsEdicionEnVivo = false;
-  mostrarPantallaPerfil();
+  await mostrarPantallaPerfil();
 }
 
 function toggleRecuperar(){
@@ -1756,7 +1802,7 @@ async function recuperarClave(){
   document.getElementById("loginCodigo").value = data.codigoNuevo;
 }
 
-function mostrarPantallaPerfil(){
+async function mostrarPantallaPerfil(){
   document.getElementById("screenLogin").style.display = "none";
   document.getElementById("screenPerfil").style.display = "";
   document.getElementById("perfilNombre").value = session.nombre;
@@ -1770,6 +1816,8 @@ function mostrarPantallaPerfil(){
   document.getElementById("wrapPerfilPunto").style.display = esAdm ? "none" : "";
   document.getElementById("wrapPerfilFondo").style.display = esAdm ? "none" : "";
   if (!esAdm){
+    document.getElementById("perfilPunto").innerHTML = `<option>Cargando puntos…</option>`;
+    await cargarPuntosBase(); // trae la lista más reciente (incluye puntos creados después del arranque inicial)
     document.getElementById("perfilPunto").innerHTML = puntosBase.map(p=>
       `<option value="${p.codigo}" ${p.codigo===session.punto?"selected":""}>${p.codigo} — ${p.contrato}</option>`
     ).join("");
@@ -1843,13 +1891,13 @@ function renderUserBadge(){
   b.style.display = "flex";
   const rolTxt = session.rol === "admin" ? "Administrador" : `Supervisor · ${session.punto}`;
   b.innerHTML = `<span><b>${session.nombre} ${session.apellido}</b></span><span class="rolpill">${rolTxt}</span><button id="btnEditarPerfil">Mi perfil</button><button id="btnCerrarSesion">Salir</button>`;
-  document.getElementById("btnEditarPerfil").addEventListener("click", ()=>{
+  document.getElementById("btnEditarPerfil").addEventListener("click", async ()=>{
     perfilEsEdicionEnVivo = true;
     document.getElementById("tabsNav").style.display = "none";
     document.getElementById("screenRegistro").style.display = "none";
     document.getElementById("screenInformes").style.display = "none";
     document.getElementById("screenUsuarios").style.display = "none";
-    mostrarPantallaPerfil();
+    await mostrarPantallaPerfil();
   });
   document.getElementById("btnCerrarSesion").addEventListener("click", cerrarSesion);
 }
@@ -1868,6 +1916,7 @@ async function iniciarApp(){
     document.getElementById("puntoCod").disabled = false;
   }
 
+  await cargarConfigGeneral();
   await cargarPuntosBase();
   const resUsuarios = await fetchUsuariosJSONP();
   if (resUsuarios.error) {
