@@ -232,6 +232,15 @@
         <label class="field">Nueva clave<input type="text" id="perfilNuevaClave" style="text-transform:uppercase;" /></label>
         <label class="field" style="margin-top:10px;">Repite la nueva clave<input type="text" id="perfilNuevaClave2" style="text-transform:uppercase;" /></label>
       </div>
+
+      <div style="background:var(--soft);border-radius:10px;padding:14px;margin-top:16px;">
+        <div class="section-label" style="margin-bottom:8px;">🔥 Precio actual del tanque de gas</div>
+        <label class="field">Precio por tanque ($)
+          <input type="number" step="0.01" id="perfilPrecioTanque" />
+        </label>
+        <div class="hint" style="margin-top:6px;">Este precio lo ve y lo puede corregir cualquier persona al ingresar — se actualiza para todo el equipo.</div>
+      </div>
+
       <div id="perfilError" class="errmsg"></div>
       <button class="primary" id="btnConfirmarPerfil" style="width:100%;justify-content:center;margin-top:16px;">Confirmar y continuar</button>
       <button id="btnCancelarPerfil" class="btn-danger" style="width:100%;justify-content:center;margin-top:10px;">Cancelar y volver a ingresar código</button>
@@ -536,19 +545,6 @@ async function cargarConfigGeneral(){
   }
 }
 
-async function editarPrecioTanque(){
-  const nuevo = prompt(`Precio actual por tanque: ${money(PRECIO_TANQUE)}\n\nIngresa el nuevo precio (solo el número, ej. 4.50):`, PRECIO_TANQUE);
-  if (nuevo === null) return; // canceló
-  const valor = Number(String(nuevo).replace(",", "."));
-  if (!valor || valor <= 0){
-    toast("Ingresa un número válido mayor a 0.");
-    return;
-  }
-  await enviarPostBackend({ accion:"guardarConfig", codigoSolicitante: session.codigo, precioTanque: valor });
-  PRECIO_TANQUE = valor;
-  toast(`Precio por tanque actualizado a ${money(valor)} para todos.`);
-  renderAll();
-}
 
 
 // =============================================================================
@@ -609,11 +605,27 @@ function derived(){
 // =============================================================================
 function renderSelect(){
   const sel = document.getElementById("puntoCod");
-  sel.innerHTML = puntosEfectivos.filter(puntoVisiblePara).map(p=>`<option value="${p.codigo}" ${p.codigo===state.puntoCod?"selected":""}>${p.codigo} — ${p.contrato}</option>`).join("");
+  const visibles = puntosEfectivos.filter(puntoVisiblePara);
+  let html = visibles.map(p=>`<option value="${p.codigo}" ${p.codigo===state.puntoCod?"selected":""}>${p.codigo} — ${p.contrato}</option>`).join("");
+  if (!esAdmin() && state.puntoCod && !visibles.some(p=>p.codigo===state.puntoCod)){
+    html = `<option value="${state.puntoCod}" selected>${state.puntoCod} — ⚠️ no encontrado</option>` + html;
+  }
+  sel.innerHTML = html;
 }
 
 function renderChips(){
   const p = punto();
+  if (!p){
+    document.getElementById("chips").innerHTML = `
+      <div class="chip" style="grid-column:1/-1;background:#FDECEA;">
+        <div class="l" style="color:#8A2E23;">⚠️ Punto no encontrado</div>
+        <div class="v" style="color:#8A2E23;font-weight:600;">
+          Tu punto asignado ("${state.puntoCod || session.punto || "—"}") no existe en la lista de puntos actual.
+          Pídele al administrador que lo cree en "Usuarios y claves → Puntos", o que te reasigne uno existente.
+        </div>
+      </div>`;
+    return;
+  }
   document.getElementById("chips").innerHTML = `
     <div class="chip"><div class="l">Responsable</div><div class="v">${p.responsable}</div></div>
     <div class="chip"><div class="l">Cédula</div><div class="v">${p.cedula}</div></div>
@@ -779,12 +791,16 @@ async function eliminarRegistro(punto, fechaReposicion, btn){
 }
 
 function renderAll(){
-  renderSelect(); renderChips(); renderDias(); renderResults(); renderThumbs(); renderHistory();
-  document.getElementById("footnote").innerHTML =
-    `Umbral de bloqueo: ratio ≥ ${RATIO_LIMITE}% · Precio por tanque: ${money(PRECIO_TANQUE)} <button id="btnEditarPrecio" style="background:none;border:none;color:var(--navy);font-size:11px;text-decoration:underline;cursor:pointer;padding:0;">✏️ editar</button> · Proveedor: ${PROVEEDOR.nombre} (RUC ${PROVEEDOR.ruc})`;
-  const btnP = document.getElementById("btnEditarPrecio");
-  if (btnP) btnP.addEventListener("click", editarPrecioTanque);
-  document.getElementById("cfgwarn").style.display = CONFIG.API_URL.indexOf("PEGA_AQUI") === 0 ? "block" : "none";
+  const pasos = [renderSelect, renderChips, renderDias, renderResults, renderThumbs, renderHistory];
+  pasos.forEach(fn => {
+    try { fn(); }
+    catch(e){ console.error(`Error en ${fn.name}:`, e); }
+  });
+  try {
+    document.getElementById("footnote").textContent =
+      `Umbral de bloqueo: ratio ≥ ${RATIO_LIMITE}% · Precio por tanque: ${money(PRECIO_TANQUE)} (editable desde "Mi perfil") · Proveedor: ${PROVEEDOR.nombre} (RUC ${PROVEEDOR.ruc})`;
+    document.getElementById("cfgwarn").style.display = CONFIG.API_URL.indexOf("PEGA_AQUI") === 0 ? "block" : "none";
+  } catch(e){ console.error("Error pintando el pie de página:", e); }
 }
 
 // =============================================================================
@@ -878,6 +894,10 @@ function guardarRegistro(){
   }
   if (CONFIG.API_URL.indexOf("PEGA_AQUI") === 0){
     document.getElementById("errBox").innerHTML = `<div class="errmsg">Falta configurar CONFIG.API_URL con la URL de tu Google Apps Script.</div>`;
+    return;
+  }
+  if (!punto()){
+    document.getElementById("errBox").innerHTML = `<div class="errmsg">Tu punto ("${state.puntoCod}") no existe en la lista de puntos. Pide al administrador que lo cree o te reasigne uno válido antes de guardar.</div>`;
     return;
   }
 
@@ -1161,6 +1181,10 @@ async function generarExcelDesdeEstado(){
   }
   const d = derived();
   const p = punto();
+  if (!p){
+    toast(`Tu punto ("${state.puntoCod}") no existe en la lista de puntos. Contacta al administrador.`);
+    return;
+  }
   const record = {
     punto: state.puntoCod, contrato: p.contrato, responsable: p.responsable, cedula: p.cedula, valorFondo: p.valorFondo,
     fechaReposicion: state.fechaReposicion, fechaInicio: toISODate(d.fechaInicio), fechaFin: toISODate(d.fechaFin),
@@ -1398,6 +1422,10 @@ async function imprimirPdfDesdeEstado(){
   }
   const d = derived();
   const p = punto();
+  if (!p){
+    toast(`Tu punto ("${state.puntoCod}") no existe en la lista de puntos. Contacta al administrador.`);
+    return;
+  }
   const record = {
     punto: state.puntoCod, contrato: p.contrato, responsable: p.responsable, cedula: p.cedula, valorFondo: p.valorFondo,
     fechaReposicion: state.fechaReposicion, fechaInicio: toISODate(d.fechaInicio), fechaFin: toISODate(d.fechaFin),
@@ -1811,6 +1839,10 @@ async function mostrarPantallaPerfil(){
   document.getElementById("perfilFondo").value = session.fondo || "";
   document.getElementById("perfilNuevaClave").value = "";
   document.getElementById("perfilNuevaClave2").value = "";
+  document.getElementById("perfilPrecioTanque").value = PRECIO_TANQUE; // valor conocido localmente, se refresca abajo
+  cargarConfigGeneral().then(()=>{
+    document.getElementById("perfilPrecioTanque").value = PRECIO_TANQUE;
+  });
 
   const esAdm = session.rol === "admin";
   document.getElementById("wrapPerfilPunto").style.display = esAdm ? "none" : "";
@@ -1818,9 +1850,16 @@ async function mostrarPantallaPerfil(){
   if (!esAdm){
     document.getElementById("perfilPunto").innerHTML = `<option>Cargando puntos…</option>`;
     await cargarPuntosBase(); // trae la lista más reciente (incluye puntos creados después del arranque inicial)
-    document.getElementById("perfilPunto").innerHTML = puntosBase.map(p=>
+    const opciones = puntosBase.map(p=>
       `<option value="${p.codigo}" ${p.codigo===session.punto?"selected":""}>${p.codigo} — ${p.contrato}</option>`
-    ).join("");
+    );
+    // Si el punto asignado a la persona ya no existe en la lista, NUNCA lo
+    // reemplazamos en silencio por el primero de la lista (eso corrompía el
+    // dato) — lo dejamos visible y marcado, para que se note y se corrija.
+    if (session.punto && !puntosBase.some(p=>p.codigo===session.punto)){
+      opciones.unshift(`<option value="${session.punto}" selected>${session.punto} — ⚠️ no encontrado, avisa al administrador</option>`);
+    }
+    document.getElementById("perfilPunto").innerHTML = opciones.join("");
   }
 
   // Un supervisor que entra por primera vez (con la clave compartida) debe
@@ -1861,6 +1900,12 @@ async function confirmarPerfil(){
     session.fondo = Number(document.getElementById("perfilFondo").value) || 0;
   }
   session.primeraVez = false;
+
+  const precioNuevo = Number(document.getElementById("perfilPrecioTanque").value);
+  if (precioNuevo && precioNuevo > 0 && precioNuevo !== PRECIO_TANQUE){
+    await enviarPostBackend({ accion:"guardarConfig", codigoSolicitante: session.codigo, precioTanque: precioNuevo });
+    PRECIO_TANQUE = precioNuevo;
+  }
 
   await guardarPerfilBackend(codigoOriginal);
   guardarSesionLocal();
