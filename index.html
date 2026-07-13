@@ -1848,8 +1848,13 @@ async function mostrarPantallaPerfil(){
   document.getElementById("wrapPerfilPunto").style.display = esAdm ? "none" : "";
   document.getElementById("wrapPerfilFondo").style.display = esAdm ? "none" : "";
   if (!esAdm){
-    document.getElementById("perfilPunto").innerHTML = `<option>Cargando puntos…</option>`;
+    const btnConfirmar = document.getElementById("btnConfirmarPerfil");
+    document.getElementById("perfilPunto").innerHTML = `<option value="">Cargando puntos…</option>`;
+    btnConfirmar.disabled = true;
+    btnConfirmar.textContent = "Cargando puntos...";
     await cargarPuntosBase(); // trae la lista más reciente (incluye puntos creados después del arranque inicial)
+    btnConfirmar.disabled = false;
+    btnConfirmar.textContent = "Confirmar y continuar";
     const opciones = puntosBase.map(p=>
       `<option value="${p.codigo}" ${p.codigo===session.punto?"selected":""}>${p.codigo} — ${p.contrato}</option>`
     );
@@ -1875,6 +1880,10 @@ async function confirmarPerfil(){
   document.getElementById("perfilError").textContent = "";
   if (!nombre || !apellido || !cedula){
     document.getElementById("perfilError").textContent = "Completa nombre, apellido y cédula.";
+    return;
+  }
+  if (session.rol !== "admin" && !document.getElementById("perfilPunto").value){
+    document.getElementById("perfilError").textContent = "Espera a que termine de cargar la lista de puntos antes de continuar.";
     return;
   }
 
