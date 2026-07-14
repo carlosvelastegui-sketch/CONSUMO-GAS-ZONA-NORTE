@@ -50,11 +50,11 @@
   .alert.bad{background:var(--red-bg);border:1px solid var(--red-line);color:var(--red-ink);}
   .alert.ok{background:var(--green-bg);border:1px solid var(--green-line);color:var(--green-ink);align-items:center;}
   .upload{display:inline-flex;align-items:center;gap:8px;border:1.5px dashed #C7CDDB;border-radius:10px;padding:12px 14px;cursor:pointer;font-size:12.5px;color:var(--muted);width:fit-content;}
-  .thumbs{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:10px;}
-  @media (max-width:600px){.thumbs{grid-template-columns:repeat(3,1fr);}}
+  .thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;}
+  @media (max-width:600px){.thumbs{grid-template-columns:repeat(2,1fr);}}
   .thumb{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1;}
   .thumb img{width:100%;height:100%;object-fit:contain;background:#F0F2F5;display:block;}
-  .thumb button{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.55);border:none;border-radius:50%;width:18px;height:18px;color:#fff;cursor:pointer;font-size:11px;line-height:1;}
+  .thumb button{position:absolute;top:5px;right:5px;background:rgba(0,0,0,.55);border:none;border-radius:50%;width:24px;height:24px;color:#fff;cursor:pointer;font-size:14px;line-height:1;}
   .hint{font-size:11px;color:var(--faint);margin-top:6px;}
   .errmsg{color:#C0392B;font-size:12.5px;margin-bottom:10px;}
   .btnrow{display:flex;gap:10px;flex-wrap:wrap;}
@@ -155,7 +155,7 @@
 
   .recibo-evidencia-title{font-weight:800;font-size:16px;margin:10px 0 14px;}
   .recibo-fotos{display:flex;flex-wrap:wrap;gap:16px;}
-  .recibo-fotos img{width:250px;height:185px;object-fit:contain;background:#F0F2F5;border:1px solid #999;border-radius:4px;}
+  .recibo-fotos img{width:380px;height:280px;object-fit:contain;background:#F0F2F5;border:1px solid #999;border-radius:4px;}
 
   .cs-table{width:75%;margin:0 auto;border-collapse:collapse;table-layout:fixed;font-family:Calibri,Arial,sans-serif;}
   .cs-table td{padding:4px 6px;font-size:11px;vertical-align:middle;overflow-wrap:break-word;}
@@ -1164,8 +1164,8 @@ function construirHojaCCHH(wb, r, imagenesInline){
     sh.getCell("B19").font = { bold:true, size:12 };
 
     let row = 21;
-    let col = 2; // columna B
-    const porFila = 3; // 3 fotos por fila, para que quepan en horizontal
+    const columnas = [2, 7]; // columna B y columna G: 2 fotos por fila, más grandes
+    const porFila = columnas.length;
     let enFila = 0;
 
     imagenesInline.forEach((img) => {
@@ -1174,11 +1174,11 @@ function construirHojaCCHH(wb, r, imagenesInline){
       let ext = match[1].toLowerCase(); if (ext === "jpg") ext = "jpeg";
       const imgId = wb.addImage({ base64: img.dataUrl, extension: ext });
       const dim = (img.width && img.height) ? { width: img.width, height: img.height } : obtenerDimensionesJPEG(img.dataUrl);
-      const tam = ajustarDimensiones(dim && dim.width, dim && dim.height, 230, 170);
+      const tam = ajustarDimensiones(dim && dim.width, dim && dim.height, 350, 260);
+      const col = columnas[enFila];
       sh.addImage(imgId, { tl:{ col: col-1, row: row-1 }, ext: tam });
-      col += 3;
       enFila++;
-      if (enFila >= porFila){ enFila = 0; col = 2; row += 10; }
+      if (enFila >= porFila){ enFila = 0; row += 16; }
     });
   }
 
