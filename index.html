@@ -580,6 +580,21 @@ let state = {
   history: [],
 };
 
+// Se llama al cambiar de Punto o de Fecha de reposición: evita que días,
+// servicios o fotos de un punto/semana se mezclen por accidente con otro
+// (esto causaba que se guardaran fotos de un punto bajo el nombre de otro).
+function resetearFormulario(avisar){
+  const habiaAlgo = state.servicios || state.imagenes.length || state.dias.some(d => d !== "");
+  state.dias = ["","","","","","",""];
+  state.servicios = "";
+  state.imagenes = [];
+  state.saved = false;
+  document.getElementById("servicios").value = "";
+  if (avisar && habiaAlgo){
+    toast("Se limpiaron los datos del formulario (días, servicios y fotos) al cambiar de punto/fecha, para evitar mezclarlos con otro registro.");
+  }
+}
+
 // =============================================================================
 // Utilidades de fecha / formato
 // =============================================================================
@@ -2359,11 +2374,11 @@ document.getElementById("btnRecuperar").addEventListener("click", recuperarClave
 document.getElementById("recuperarCedula").addEventListener("keydown", e=>{ if (e.key==="Enter") recuperarClave(); });
 
 document.getElementById("puntoCod").addEventListener("change", e=>{
-  state.puntoCod = e.target.value; state.saved = false; renderChips(); renderResults();
+  state.puntoCod = e.target.value; resetearFormulario(true); renderChips(); renderDias(); renderResults(); renderThumbs(); actualizarBloqueoFormulario();
 });
 document.getElementById("fechaReposicion").value = state.fechaReposicion;
 document.getElementById("fechaReposicion").addEventListener("change", e=>{
-  state.fechaReposicion = e.target.value; state.saved = false; renderDias(); renderResults(); actualizarBloqueoFormulario();
+  state.fechaReposicion = e.target.value; resetearFormulario(true); renderDias(); renderResults(); renderThumbs(); actualizarBloqueoFormulario();
 });
 document.getElementById("servicios").addEventListener("input", e=>{
   state.servicios = e.target.value.replace(/[^0-9]/g,"");
