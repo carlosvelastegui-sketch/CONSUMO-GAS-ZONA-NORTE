@@ -788,6 +788,7 @@ function renderHistory(){
           <div style="font-size:12px;"><strong>${money(r.Valor)}</strong> · ${r.TotalGas} tanques</div>
           <button class="tinybtn" data-dl="${r.Punto}|${r.FechaReposicion}" ${bloq?"disabled":""}>⬇️ Excel</button>
           <button class="tinybtn" data-pdf="${r.Punto}|${r.FechaReposicion}" ${bloq?"disabled":""}>🖨️ PDF</button>
+          ${esAdmin() ? `<button class="tinybtn" data-editreg="${r.Punto}|${r.FechaReposicion}">✏️ Editar</button>` : ""}
           ${esAdmin() ? `<button class="tinybtn" data-delreg="${r.Punto}|${r.FechaReposicion}" style="color:var(--red);border-color:var(--red-line);">🗑️</button>` : ""}
         </div>
         ${thumbsHtml}
@@ -814,6 +815,13 @@ function renderHistory(){
       eliminarRegistro(cod, fecha, btn);
     });
   });
+  document.querySelectorAll("[data-editreg]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const [cod, fecha] = btn.dataset.editreg.split("|");
+      const rec = state.history.find(r=>r.Punto===cod && r.FechaReposicion===fecha);
+      if (rec) cargarRegistroParaEditar(rec, btn);
+    });
+  });
 }
 
 async function eliminarRegistro(punto, fechaReposicion, btn){
@@ -822,6 +830,44 @@ async function eliminarRegistro(punto, fechaReposicion, btn){
   await enviarPostBackend({ accion:"eliminarRegistro", codigoSolicitante: session.codigo, punto, fechaReposicion });
   toast("Registro eliminado.");
   await cargarHistorial();
+}
+
+// Carga un registro ya guardado en el formulario para poder corregirlo (solo
+// Administrador — los supervisores nunca ven el botón que llama a esto).
+// Trae también las fotos ya guardadas desde Drive, para no perderlas si el
+// admin guarda de nuevo sin querer tocarlas.
+async function cargarRegistroParaEditar(r, btn){
+  if (!esAdmin()) return; // protección extra, por si se llamara desde otro lado
+  const prevHtml = btn ? btn.innerHTML : null;
+  if (btn){ btn.disabled = true; btn.textContent = "Cargando..."; }
+  try {
+    state.puntoCod = r.Punto;
+    state.fechaReposicion = r.FechaReposicion;
+    state.dias = [r.Dia1,r.Dia2,r.Dia3,r.Dia4,r.Dia5,r.Dia6,r.Dia7].map(v => String(v ?? ""));
+    state.servicios = String(r.Servicios ?? "");
+    state.saved = true; // ya existe guardado con estos datos; se vuelve false si el admin cambia algo
+
+    document.getElementById("puntoCod").value = r.Punto;
+    document.getElementById("fechaReposicion").value = r.FechaReposicion;
+    document.getElementById("servicios").value = state.servicios;
+
+    // Trae las fotos ya guardadas (si las hay) para mostrarlas como adjuntas
+    state.imagenes = [];
+    const ids = r.Imagenes || [];
+    for (const id of ids) {
+      const dataUrl = await fetchImagenBase64JSONP(id);
+      if (dataUrl) state.imagenes.push({ name: `evidencia_${state.imagenes.length+1}.jpg`, dataUrl });
+    }
+
+    renderAll();
+    document.getElementById("screenRegistro").scrollIntoView({ behavior:"smooth", block:"start" });
+    toast(`Cargado para editar: ${r.Punto} (reposición ${r.FechaReposicion}). Corrige lo que necesites y presiona "Guardar registro".`);
+  } catch(e){
+    console.error("Error cargando registro para editar:", e);
+    alert("No se pudo cargar el registro para editar:\n\n" + e.message);
+  } finally {
+    if (btn){ btn.disabled = false; btn.innerHTML = prevHtml; }
+  }
 }
 
 function renderAll(){
